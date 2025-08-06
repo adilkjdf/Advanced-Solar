@@ -6,13 +6,14 @@ import { ProjectData, Design, FieldSegment } from '../types/project';
 import { ArrowLeft, Check, RotateCcw, RotateCw, Settings, LayoutGrid, Crosshair, GitBranch, PlusCircle, Plus, Trash2 } from 'lucide-react';
 import { formatArea, formatDistance } from '../utils/mapUtils';
 import CreateFieldSegmentPanel from './CreateFieldSegmentPanel';
-import DrawingToolbar, { EditorTool } from './DrawingToolbar';
 
 interface DesignEditorProps {
   project: ProjectData;
   design: Design;
   onBack: () => void;
 }
+
+type EditorTool = 'none' | 'draw' | 'edit' | 'delete';
 
 const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -58,7 +59,12 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     if (!currentGeom) return;
     const coords = currentGeom.getCoordinates()[0];
     if (coords.length === 0) return;
+    
     const lastVertex = coords[coords.length - 1];
+    if (!lastVertex || typeof lastVertex.x !== 'number' || typeof lastVertex.y !== 'number') {
+        return;
+    }
+
     if (tempLineRef.current) tempLineRef.current.remove();
     if (tempLabelRef.current) tempLabelRef.current.remove();
     tempLineRef.current = new maptalks.LineString([lastVertex, coord], {
@@ -319,7 +325,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
           <ArrowLeft className="w-5 h-5" />
           <span>Back to Project</span>
         </button>
-        <DrawingToolbar activeTool={activeTool} onToolSelect={setActiveTool} />
       </div>
     </div>
   );
