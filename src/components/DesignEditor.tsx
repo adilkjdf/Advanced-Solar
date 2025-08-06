@@ -97,6 +97,29 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     }
   }, [activeTool]);
 
+  const updateDistanceLabels = useCallback((geometry: maptalks.Polygon) => {
+    if (!geometry || !labelLayerRef.current) return;
+    
+    // Find and remove only the permanent distance labels
+    const oldLabels = labelLayerRef.current.getGeometries().filter(g => g.getProperties() && g.getProperties().isDistanceLabel);
+    if (oldLabels.length) {
+      labelLayerRef.current.removeGeometry(oldLabels);
+    }
+  
+    const coords = geometry.getCoordinates()[0];
+    if (coords.length < 2) return;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const line = new maptalks.LineString([coords[i], coords[i + 1]]);
+      const label = new maptalks.Label(formatDistance(line.getLength()), line.getCenter(), {
+        'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
+        'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
+      });
+      // Add a property to identify these labels
+      label.setProperties({ isDistanceLabel: true });
+      labelLayerRef.current.addGeometry(label);
+    }
+  }, []);
+
   const setupDrawingListeners = useCallback(() => {
     const drawTool = drawToolRef.current;
     if (!drawTool) return;
@@ -106,7 +129,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       if (!coord || typeof coord.x !== 'number' || typeof coord.y !== 'number') {
         return;
       }
-      labelLayerRef.current?.clear();
+      // Do not clear the layer here, as it removes the ghost marker
       const startMarker = new maptalks.Marker(coord, {
         interactive: true,
         symbol: {
@@ -148,7 +171,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       setFieldSegments(prev => [...prev, newSegment]);
       setActiveTool('none');
     });
-  }, []);
+  }, [updateDistanceLabels]);
 
   useEffect(() => {
     if (mapContainerRef.current && !mapInstanceRef.current && project.coordinates) {
@@ -177,22 +200,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       };
     }
   }, [project.coordinates, setupDrawingListeners]);
-
-  const updateDistanceLabels = (geometry: maptalks.Polygon) => {
-    if (!geometry || !labelLayerRef.current) return;
-    const labels = labelLayerRef.current.getGeometries().filter(g => g instanceof maptalks.Label && !g.isDrag) as maptalks.Label[];
-    if (labels.length) labelLayerRef.current.removeGeometry(labels);
-    const coords = geometry.getCoordinates()[0];
-    if (coords.length < 2) return;
-    for (let i = 0; i < coords.length - 1; i++) {
-      const line = new maptalks.LineString([coords[i], coords[i + 1]]);
-      const label = new maptalks.Label(formatDistance(line.getLength()), line.getCenter(), {
-        'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
-        'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
-      });
-      labelLayerRef.current.addGeometry(label);
-    }
-  };
 
   const clearCurrentShape = () => {
     drawToolRef.current?.clear();
