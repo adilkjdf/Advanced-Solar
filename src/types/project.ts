@@ -3,7 +3,6 @@ export interface Design {
   name: string;
   clonedFrom?: string;
   project_id: string;
-  user_id: string;
   created_at: string;
 }
 
@@ -24,7 +23,6 @@ export interface ProjectData {
     lng: number;
   };
   designs?: Design[];
-  user_id: string;
   created_at: string;
 }
 

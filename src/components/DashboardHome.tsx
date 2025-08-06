@@ -1,13 +1,14 @@
 import React from 'react';
-import { Plus, FolderOpen, Users, Zap, TrendingUp } from 'lucide-react';
+import { Plus, FolderOpen, Trash2 } from 'lucide-react';
 import { ProjectData } from '../types/project';
 
 interface DashboardHomeProps {
   onCreateProject: () => void;
   projects: ProjectData[];
+  onDeleteProject: (id: string) => void;
 }
 
-const DashboardHome: React.FC<DashboardHomeProps> = ({ onCreateProject, projects }) => {
+const DashboardHome: React.FC<DashboardHomeProps> = ({ onCreateProject, projects, onDeleteProject }) => {
   return (
     <div className="max-w-7xl mx-auto p-6">
       {/* Welcome Section */}
@@ -73,7 +74,16 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ onCreateProject, projects
                       <p className="font-semibold text-gray-800">{project.projectName}</p>
                       <p className="text-sm text-gray-500">{project.address}</p>
                     </div>
-                    <p className="text-sm text-gray-500">{new Date(project.created_at).toLocaleDateString()}</p>
+                    <div className="flex items-center space-x-4">
+                      <p className="text-sm text-gray-500">{new Date(project.created_at).toLocaleDateString()}</p>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); onDeleteProject(project.id); }} 
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                        aria-label="Delete project"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </li>
               ))}

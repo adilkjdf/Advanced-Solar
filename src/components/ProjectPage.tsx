@@ -5,7 +5,6 @@ import * as maptalks from 'maptalks';
 import NewDesignModal from './NewDesignModal';
 import DesignEditor from './DesignEditor';
 import { supabase } from '../integrations/supabase/client';
-import { useAuth } from '../contexts/AuthProvider';
 
 interface ProjectPageProps {
   project: ProjectData;
@@ -15,7 +14,6 @@ interface ProjectPageProps {
 type TabType = 'designs' | 'conditions' | 'shading' | 'sharing' | 'reports';
 
 const ProjectPage: React.FC<ProjectPageProps> = ({ project, onBack }) => {
-  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('designs');
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<maptalks.Map | null>(null);
@@ -47,13 +45,11 @@ const ProjectPage: React.FC<ProjectPageProps> = ({ project, onBack }) => {
   ];
 
   const handleCreateDesign = async (data: { name: string; cloneFrom?: string }) => {
-    if (!user) return;
     const { data: newDesign, error } = await supabase
       .from('designs')
       .insert({
         name: data.name,
         project_id: project.id,
-        user_id: user.id,
         cloned_from: data.cloneFrom || null,
       })
       .select()
@@ -176,7 +172,7 @@ const ProjectPage: React.FC<ProjectPageProps> = ({ project, onBack }) => {
               </button>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">{project.projectName}</h1>
-                <p className="text-sm text-gray-600">{project.coordinates?.lat.toFixed(4)}, {project.coordinates?.lng.toFixed(4)}</p>
+                <p className="text-sm text-gray-600">{project.address}</p>
               </div>
             </div>
           </div>
@@ -185,8 +181,15 @@ const ProjectPage: React.FC<ProjectPageProps> = ({ project, onBack }) => {
 
       <div className="max-w-7xl mx-auto p-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+          <div className="lg:col-span-1 space-y-6">
+            <div className="bg-white rounded-lg shadow-sm border">
+              <div ref={mapContainerRef} className="h-64 w-full rounded-t-lg" />
+              <div className="p-4">
+                <h3 className="font-semibold text-gray-800">{project.address}</h3>
+                <p className="text-sm text-gray-600">{project.coordinates?.lat.toFixed(4)}, {project.coordinates?.lng.toFixed(4)}</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow-sm border p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                 <Settings className="w-5 h-5 mr-2 text-orange-500" />
                 Project Overview
@@ -199,10 +202,6 @@ const ProjectPage: React.FC<ProjectPageProps> = ({ project, onBack }) => {
                 <div>
                   <label className="text-sm font-medium text-gray-700">Address</label>
                   <p className="text-sm text-gray-900">{project.address}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Owner</label>
-                  <p className="text-sm text-gray-900">{user?.email}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700">Last Modified</label>
