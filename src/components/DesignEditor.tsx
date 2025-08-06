@@ -121,13 +121,25 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       startPointRef.current = e.coordinate;
       labelLayerRef.current?.clear();
       const startMarker = new maptalks.Marker(e.coordinate, {
-        interactive: false, // Make marker non-interactive so click passes through to the map
+        interactive: true,
         symbol: {
           markerFile: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>'),
           markerWidth: 20,
           markerHeight: 20,
         }
       });
+
+      startMarker.on('click', (evt) => {
+        if (drawToolRef.current) {
+          const currentGeom = drawToolRef.current.getCurrentGeometry();
+          const canClose = currentGeom && currentGeom.getCoordinates()[0].length > 2;
+          if (canClose) {
+            evt.domEvent.stopPropagation();
+            drawToolRef.current.endDraw();
+          }
+        }
+      });
+
       labelLayerRef.current?.addGeometry(startMarker);
     });
 
