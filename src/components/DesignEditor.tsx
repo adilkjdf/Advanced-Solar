@@ -33,6 +33,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   const tempLineRef = useRef<maptalks.LineString | null>(null);
   const tempLabelRef = useRef<maptalks.Label | null>(null);
   const drawingIdRef = useRef<string | null>(null);
+  const mouseDistanceLabelRef = useRef<maptalks.Label | null>(null);
 
   const defaultSymbol = {
     lineColor: '#f97316',
@@ -102,6 +103,37 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     }
 
     ghostMarkerRef.current?.setCoordinates(coord);
+
+    // Update mouse distance label
+    if (coords.length > 0) {
+      const lastVertex = coords[coords.length - 1];
+      const distance = mapInstanceRef.current.distanceTo(lastVertex, coord);
+      
+      if (mouseDistanceLabelRef.current) {
+        mouseDistanceLabelRef.current.setContent(formatDistance(distance));
+        mouseDistanceLabelRef.current.setCoordinates(coord);
+      } else {
+        mouseDistanceLabelRef.current = new maptalks.Label(formatDistance(distance), coord, {
+          'textPlacement': 'point',
+          'textDx': 15,
+          'textDy': -15,
+          'boxStyle': {
+            'padding': [6, 8],
+            'symbol': {
+              'markerType': 'square',
+              'markerFill': 'rgba(0, 0, 0, 0.8)',
+              'markerLineWidth': 0
+            }
+          },
+          'textSymbol': {
+            'textFill': '#ffffff',
+            'textSize': 14,
+            'textHaloFill': '#000000',
+            'textHaloRadius': 1
+          }
+        }).addTo(labelLayerRef.current!);
+      }
+    }
 
     if (coords.length > 0) {
       const lastVertex = coords[coords.length - 1];
@@ -289,7 +321,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       if (ghostMarkerRef.current) ghostMarkerRef.current.remove();
       if (tempLineRef.current) tempLineRef.current.remove();
       if (tempLabelRef.current) tempLabelRef.current.remove();
-      ghostMarkerRef.current = tempLineRef.current = tempLabelRef.current = null;
+      if (mouseDistanceLabelRef.current) mouseDistanceLabelRef.current.remove();
+      ghostMarkerRef.current = tempLineRef.current = tempLabelRef.current = mouseDistanceLabelRef.current = null;
       
       if (labelLayerRef.current) {
         const geomsToRemove = labelLayerRef.current.getGeometries().filter(g => {
