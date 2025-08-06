@@ -1,17 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
-import { Map as LeafletMap, LatLng } from 'leaflet';
+import * as maptalks from 'maptalks';
 import { MapPin, Map, Satellite } from 'lucide-react';
-import 'leaflet/dist/leaflet.css';
-
-// Fix for default markers in react-leaflet
-import L from 'leaflet';
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
 
 interface MapSectionProps {
   address: string;
@@ -20,44 +9,124 @@ interface MapSectionProps {
   onAddressGeocode: (address: string) => Promise<{ lat: number; lng: number } | null>;
 }
 
-interface MapEventHandlerProps {
-  onLocationSelect: (lat: number, lng: number) => void;
-}
-
-const MapEventHandler: React.FC<MapEventHandlerProps> = ({ onLocationSelect }) => {
-  useMapEvents({
-    click: (e) => {
-      const { lat, lng } = e.latlng;
-      onLocationSelect(lat, lng);
-    },
-  });
-  return null;
-};
-
 const MapSection: React.FC<MapSectionProps> = ({
   address,
   coordinates,
   onLocationSelect,
-  onAddressGeocode
+  onAddressGeocode,
 }) => {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<maptalks.Map | null>(null);
+  const markerRef = useRef<maptalks.Marker | null>(null);
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
   const [isLoading, setIsLoading] = useState(false);
-  const mapRef = useRef<LeafletMap>(null);
 
-  // Default center (San Francisco Bay Area - good for solar projects)
+  // Default center (San Francisco Bay Area)
   const defaultCenter: [number, number] = [37.7749, -122.4194];
-  const mapCenter: [number, number] = coordinates 
-    ? [coordinates.lat, coordinates.lng] 
-    : defaultCenter;
+  
+  // Initialize map
+  useEffect(() => {
+    if (mapContainerRef.current && !mapInstanceRef.current) {
+      const mapCenter: [number, number] = coordinates
+        ? [coordinates.lng, coordinates.lat]
+        : [defaultCenter[1], defaultCenter[0]];
+
+      const map = new maptalks.Map(mapContainerRef.current, {
+        center: mapCenter,
+        zoom: coordinates ? 16 : 10,
+        baseLayer: new maptalks.TileLayer('base', {
+          urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          subdomains: ['a', 'b', 'c'],
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        }),
+      });
+
+      map.on('click', (e: any) => {
+        onLocationSelect(e.coordinate.y, e.coordinate.x);
+      });
+
+      mapInstanceRef.current = map;
+    }
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, []); // Run only once
+
+  // Update map center when coordinates change
+  useEffect(() => {
+    if (mapInstanceRef.current && coordinates) {
+      mapInstanceRef.current.animateTo(
+        {
+          center: [coordinates.lng, coordinates.lat],
+          zoom: 16,
+        },
+        {
+          duration: 1000,
+        }
+      );
+    }
+  }, [coordinates]);
+
+  // Update marker
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const { VectorLayer, Marker } = maptalks;
+    let layer = mapInstanceRef.current.getLayer('markerLayer') as maptalks.VectorLayer;
+
+    if (coordinates) {
+      if (!layer) {
+        layer = new VectorLayer('markerLayer').addTo(mapInstanceRef.current);
+      }
+      
+      if (markerRef.current) {
+        markerRef.current.setCoordinates([coordinates.lng, coordinates.lat]);
+      } else {
+        markerRef.current = new Marker([coordinates.lng, coordinates.lat]);
+        layer.addGeometry(markerRef.current);
+      }
+    } else {
+      if (layer) {
+        layer.clear();
+      }
+      if (markerRef.current) {
+        markerRef.current = null;
+      }
+    }
+  }, [coordinates]);
+
+  // Handle map type change
+  useEffect(() => {
+    if (mapInstanceRef.current) {
+      const urlTemplate =
+        mapType === 'satellite'
+          ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+          : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+      const attribution =
+        mapType === 'satellite'
+          ? '&copy; <a href="https://www.esri.com/">Esri</a>'
+          : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+      const newBaseLayer = new maptalks.TileLayer('base', {
+        urlTemplate,
+        attribution,
+        subdomains: ['a', 'b', 'c'],
+      });
+      mapInstanceRef.current.setBaseLayer(newBaseLayer);
+    }
+  }, [mapType]);
 
   const handleCenterOnAddress = async () => {
     if (!address.trim()) return;
-    
+
     setIsLoading(true);
     try {
       const location = await onAddressGeocode(address);
-      if (location && mapRef.current) {
-        mapRef.current.setView([location.lat, location.lng], 16);
+      if (location) {
         onLocationSelect(location.lat, location.lng);
       }
     } catch (error) {
@@ -65,18 +134,6 @@ const MapSection: React.FC<MapSectionProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const getTileLayerUrl = () => {
-    return mapType === 'satellite'
-      ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-  };
-
-  const getTileLayerAttribution = () => {
-    return mapType === 'satellite'
-      ? '&copy; <a href="https://www.esri.com/">Esri</a>'
-      : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
   };
 
   return (
@@ -112,11 +169,11 @@ const MapSection: React.FC<MapSectionProps> = ({
             </button>
           </div>
         </div>
-        
+
         <div className="text-sm text-gray-600 mb-3">
           Click on the map to select your project location or use the button below to center on the address.
         </div>
-        
+
         <button
           onClick={handleCenterOnAddress}
           disabled={!address.trim() || isLoading}
@@ -129,23 +186,9 @@ const MapSection: React.FC<MapSectionProps> = ({
 
       <div className="relative">
         <div className="h-80 sm:h-96">
-          <MapContainer
-            center={mapCenter}
-            zoom={coordinates ? 16 : 10}
-            className="h-full w-full rounded-b-lg"
-            ref={mapRef}
-          >
-            <TileLayer
-              url={getTileLayerUrl()}
-              attribution={getTileLayerAttribution()}
-            />
-            <MapEventHandler onLocationSelect={onLocationSelect} />
-            {coordinates && (
-              <Marker position={[coordinates.lat, coordinates.lng]} />
-            )}
-          </MapContainer>
+          <div ref={mapContainerRef} className="h-full w-full rounded-b-lg" />
         </div>
-        
+
         {coordinates && (
           <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-sm text-xs">
             <div className="font-medium text-gray-800">Selected Location:</div>
@@ -154,7 +197,7 @@ const MapSection: React.FC<MapSectionProps> = ({
             </div>
           </div>
         )}
-        
+
         <div className="absolute bottom-2 left-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs text-gray-600">
           Note: Map integration will be upgraded to Mapbox API in production
         </div>
