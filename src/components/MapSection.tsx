@@ -18,7 +18,7 @@ const MapSection: React.FC<MapSectionProps> = ({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<maptalks.Map | null>(null);
   const markerRef = useRef<maptalks.Marker | null>(null);
-  const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
+  const [mapType, setMapType] = useState<'satellite' | 'standard'>('satellite');
   const [isLoading, setIsLoading] = useState(false);
 
   // Default center (San Francisco Bay Area)
@@ -33,11 +33,10 @@ const MapSection: React.FC<MapSectionProps> = ({
 
       const map = new maptalks.Map(mapContainerRef.current, {
         center: mapCenter,
-        zoom: coordinates ? 16 : 10,
+        zoom: coordinates ? 18 : 10,
         baseLayer: new maptalks.TileLayer('base', {
-          urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          subdomains: ['a', 'b', 'c'],
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          urlTemplate: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+          attribution: '&copy; <a href="https://www.google.com/maps">Google Maps</a>',
         }),
       });
 
@@ -62,7 +61,7 @@ const MapSection: React.FC<MapSectionProps> = ({
       mapInstanceRef.current.animateTo(
         {
           center: [coordinates.lng, coordinates.lat],
-          zoom: 16,
+          zoom: 18,
         },
         {
           duration: 1000,
@@ -103,18 +102,12 @@ const MapSection: React.FC<MapSectionProps> = ({
     if (mapInstanceRef.current) {
       const urlTemplate =
         mapType === 'satellite'
-          ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-          : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-
-      const attribution =
-        mapType === 'satellite'
-          ? '&copy; <a href="https://www.esri.com/">Esri</a>'
-          : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+          ? 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'
+          : 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
 
       const newBaseLayer = new maptalks.TileLayer('base', {
         urlTemplate,
-        attribution,
-        subdomains: ['a', 'b', 'c'],
+        attribution: '&copy; <a href="https://www.google.com/maps">Google Maps</a>',
       });
       mapInstanceRef.current.setBaseLayer(newBaseLayer);
     }
@@ -197,10 +190,6 @@ const MapSection: React.FC<MapSectionProps> = ({
             </div>
           </div>
         )}
-
-        <div className="absolute bottom-2 left-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded text-xs text-gray-600">
-          Note: Map integration will be upgraded to Mapbox API in production
-        </div>
       </div>
     </div>
   );

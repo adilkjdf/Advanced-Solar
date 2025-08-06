@@ -1,17 +1,7 @@
-import React, { useState } from 'react';
-import { ArrowLeft, MapPin, Calendar, User, Settings, Eye, Share2, FileText, Plus, Download, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, MapPin, Settings, Eye, Share2, FileText, Plus, Download, Trash2 } from 'lucide-react';
 import { ProjectData } from '../types/project';
-import { MapContainer, TileLayer, Marker } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-
-// Fix for default markers in react-leaflet
-import L from 'leaflet';
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
+import * as maptalks from 'maptalks';
 
 interface ProjectPageProps {
   project: ProjectData;
@@ -22,6 +12,8 @@ type TabType = 'designs' | 'conditions' | 'shading' | 'sharing' | 'reports';
 
 const ProjectPage: React.FC<ProjectPageProps> = ({ project, onBack }) => {
   const [activeTab, setActiveTab] = useState<TabType>('designs');
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<maptalks.Map | null>(null);
 
   const tabs = [
     { id: 'designs' as TabType, label: 'Designs', icon: Settings },
@@ -30,6 +22,37 @@ const ProjectPage: React.FC<ProjectPageProps> = ({ project, onBack }) => {
     { id: 'sharing' as TabType, label: 'Sharing', icon: Share2 },
     { id: 'reports' as TabType, label: 'Reports', icon: FileText },
   ];
+
+  // Initialize map on component mount
+  useEffect(() => {
+    if (mapContainerRef.current && !mapInstanceRef.current && project.coordinates) {
+      const map = new maptalks.Map(mapContainerRef.current, {
+        center: [project.coordinates.lng, project.coordinates.lat],
+        zoom: 18,
+        baseLayer: new maptalks.TileLayer('base', {
+          urlTemplate: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+          attribution: '&copy; <a href="https://www.google.com/maps">Google Maps</a>',
+        }),
+        draggable: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+      });
+
+      const layer = new maptalks.VectorLayer('markerLayer').addTo(map);
+      const marker = new maptalks.Marker([project.coordinates.lng, project.coordinates.lat]);
+      layer.addGeometry(marker);
+
+      mapInstanceRef.current = map;
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [project.coordinates]);
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -303,19 +326,7 @@ const ProjectPage: React.FC<ProjectPageProps> = ({ project, onBack }) => {
                 </h4>
               </div>
               <div className="h-64">
-                {project.coordinates && (
-                  <MapContainer
-                    center={[project.coordinates.lat, project.coordinates.lng]}
-                    zoom={16}
-                    className="h-full w-full"
-                  >
-                    <TileLayer
-                      url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                      attribution="&copy; <a href='https://www.esri.com/'>Esri</a>"
-                    />
-                    <Marker position={[project.coordinates.lat, project.coordinates.lng]} />
-                  </MapContainer>
-                )}
+                <div ref={mapContainerRef} className="h-full w-full" />
               </div>
             </div>
           </div>
