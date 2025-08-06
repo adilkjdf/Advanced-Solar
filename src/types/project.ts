@@ -4,6 +4,12 @@ export interface Design {
   clonedFrom?: string;
 }
 
+export interface FieldSegment {
+  id: string;
+  geometry: any; // Stores the maptalks geometry JSON
+  area: number;
+}
+
 export interface ProjectData {
   projectName: string;
   description: string;
@@ -17,7 +23,7 @@ export interface ProjectData {
 }
 
 export interface ValidationErrors {
-  [key: string]: string;
+  [key:string]: string;
 }
 
 export interface MapSettings {
