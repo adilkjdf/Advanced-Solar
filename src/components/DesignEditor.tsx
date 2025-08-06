@@ -25,6 +25,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   const drawToolRef = useRef<maptalks.DrawTool | null>(null);
   const segmentLayerRef = useRef<maptalks.VectorLayer | null>(null);
   const labelLayerRef = useRef<maptalks.VectorLayer | null>(null);
+  const startPointRef = useRef<maptalks.Coordinate | null>(null);
 
   const defaultSymbol = {
     lineColor: '#f97316', // Orange
@@ -32,6 +33,29 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     polygonFill: '#f97316',
     polygonOpacity: 0.3,
   };
+
+  const closingSymbol = { ...defaultSymbol, lineColor: '#22c55e' }; // Green
+
+  const handleMapClick = useCallback((e: any) => {
+    if (!isDrawing || !startPointRef.current || !mapInstanceRef.current || !drawToolRef.current) return;
+
+    const map = mapInstanceRef.current;
+    const clickCoord = e.coordinate;
+    const startCoord = startPointRef.current;
+
+    const p1 = map.coordToContainerPoint(clickCoord);
+    const p2 = map.coordToContainerPoint(startCoord);
+    const distance = p1.distanceTo(p2);
+
+    const currentGeom = drawToolRef.current?.getCurrentGeometry();
+    const canClose = currentGeom && currentGeom.getCoordinates()[0].length > 2;
+
+    if (distance < 15 && canClose) {
+      e.domEvent.preventDefault();
+      e.domEvent.stopPropagation();
+      drawToolRef.current?.endDraw();
+    }
+  }, [isDrawing]);
 
   useEffect(() => {
     if (mapContainerRef.current && !mapInstanceRef.current && project.coordinates) {
@@ -66,12 +90,13 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
       return () => {
         if (mapInstanceRef.current) {
+          mapInstanceRef.current.off('click', handleMapClick);
           mapInstanceRef.current.remove();
           mapInstanceRef.current = null;
         }
       };
     }
-  }, [project.coordinates]);
+  }, [project.coordinates, handleMapClick]);
 
   const updateDistanceLabels = (geometry: maptalks.Polygon) => {
     if (!geometry || !mapInstanceRef.current || !labelLayerRef.current) return;
@@ -115,6 +140,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     if (!drawTool) return;
 
     drawTool.on('drawstart', (e: any) => {
+      startPointRef.current = e.coordinate;
       labelLayerRef.current?.clear();
       const startMarker = new maptalks.Marker(e.coordinate, {
         symbol: {
@@ -124,9 +150,26 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         }
       });
       labelLayerRef.current?.addGeometry(startMarker);
+      mapInstanceRef.current?.on('click', handleMapClick);
     });
 
     drawTool.on('mousemove', (e: any) => {
+        if (!startPointRef.current || !mapInstanceRef.current) return;
+        
+        const map = mapInstanceRef.current;
+        const currentCoord = e.coordinate;
+        const startCoord = startPointRef.current;
+
+        const p1 = map.coordToContainerPoint(currentCoord);
+        const p2 = map.coordToContainerPoint(startCoord);
+        const distance = p1.distanceTo(p2);
+
+        const currentGeom = drawTool.getCurrentGeometry();
+        const canClose = currentGeom && currentGeom.getCoordinates()[0].length > 2;
+
+        const isNearStart = distance < 15 && canClose;
+        drawTool.setSymbol(isNearStart ? closingSymbol : defaultSymbol);
+
         if (e.geometry) {
             updateDistanceLabels(e.geometry);
         }
@@ -163,7 +206,9 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   };
 
   const endDrawing = () => {
+    mapInstanceRef.current?.off('click', handleMapClick);
     setIsDrawing(false);
+    startPointRef.current = null;
     labelLayerRef.current?.clear();
     mapContainerRef.current?.style.setProperty('cursor', 'grab');
     drawToolRef.current?.disable();
