@@ -45,7 +45,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     const coord = e.coordinate;
 
-    // Update ghost marker position
+    // Update ghost marker position (the green dot)
     if (!ghostMarkerRef.current) {
       ghostMarkerRef.current = new maptalks.Marker(coord, {
         symbol: { 'markerType': 'ellipse', 'markerFill': '#22c55e', 'markerWidth': 10, 'markerHeight': 10, 'markerLineWidth': 0 }
@@ -65,8 +65,12 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     if (tempLineRef.current) tempLineRef.current.remove();
     if (tempLabelRef.current) tempLabelRef.current.remove();
 
+    // Create a solid orange preview line
     tempLineRef.current = new maptalks.LineString([lastVertex, coord], {
-      symbol: { 'lineDasharray': [5, 5], 'lineColor': '#ffffff', 'lineWidth': 2 }
+      symbol: { 
+        'lineColor': '#f97316', // Solid orange line
+        'lineWidth': 3 
+      }
     }).addTo(labelLayerRef.current!);
 
     const distance = tempLineRef.current.getLength();
@@ -197,7 +201,9 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         area: e.geometry.getArea(),
       };
       
-      const polygon = e.geometry.copy().setSymbol(defaultSymbol).setId(newSegmentId);
+      // Use a different symbol for the final polygon to distinguish from the preview
+      const finalSymbol = { ...defaultSymbol, polygonOpacity: 0.3 };
+      const polygon = e.geometry.copy().setSymbol(finalSymbol).setId(newSegmentId);
       segmentLayerRef.current?.addGeometry(polygon);
       setFieldSegments(prev => [...prev, newSegment]);
       
