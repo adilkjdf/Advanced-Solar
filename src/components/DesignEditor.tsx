@@ -50,7 +50,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     const currentGeom = drawToolRef.current?.getCurrentGeometry();
     if (!currentGeom) {
-        // If drawing hasn't started, just move the ghost marker
         if (!ghostMarkerRef.current) {
             ghostMarkerRef.current = new maptalks.Marker(coord, {
               symbol: { 'markerType': 'ellipse', 'markerFill': '#22c55e', 'markerWidth': 10, 'markerHeight': 10, 'markerLineWidth': 0 }
@@ -64,25 +63,22 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     const coords = currentGeom.getCoordinates()[0];
     let isSnapped = false;
 
-    // Snapping logic
     if (coords.length > 2) {
       const firstVertex = coords[0];
       const distance = mapInstanceRef.current.distanceTo(coord, firstVertex);
-      const snapThreshold = mapInstanceRef.current.getResolution() * 15; // 15 pixels threshold
+      const snapThreshold = mapInstanceRef.current.getResolution() * 15;
 
       if (distance < snapThreshold) {
         coord = firstVertex;
         isSnapped = true;
         currentGeom.setSymbol(closingSymbol);
       } else {
-        currentGeom.setSymbol(defaultSymbol);
+        currentGoeom.setSymbol(defaultSymbol);
       }
     }
 
-    // Update ghost marker
     ghostMarkerRef.current?.setCoordinates(coord);
 
-    // Update temporary line and label
     if (coords.length > 0) {
       const lastVertex = coords[coords.length - 1];
       if (tempLineRef.current) tempLineRef.current.remove();
@@ -93,8 +89,9 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       }).addTo(labelLayerRef.current!);
       
       const distance = tempLineRef.current.getLength();
-      const midPoint = tempLineRef.current.getCenter();
-      tempLabelRef.current = new maptalks.Label(formatDistance(distance), midPoint, {
+      tempLabelRef.current = new maptalks.Label(formatDistance(distance), tempLineRef.current.getCenter(), {
+        'textPlacement' : 'line',
+        'textDy': -15,
         'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
         'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
       }).addTo(labelLayerRef.current!);
@@ -114,6 +111,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     for (let i = 0; i < coords.length - 1; i++) {
       const line = new maptalks.LineString([coords[i], coords[i + 1]]);
       const label = new maptalks.Label(formatDistance(line.getLength()), line.getCenter(), {
+        'textPlacement' : 'line',
+        'textDy': -15,
         'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
         'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
       });
