@@ -85,19 +85,36 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       labelLayerRef.current?.clear();
     });
 
-    drawTool.on('drawvertex drawend mousemove', (e: any) => {
-      const geometry = e.geometry || drawTool.getCurrentGeometry();
+    const handleDrawingProgress = (e: any) => {
+      const geometry = drawTool.getCurrentGeometry();
       if (!geometry) return;
 
-      const coords = geometry.getCoordinates()[0];
-      if (coords.length < 2) return;
+      const coordinates = geometry.getCoordinates();
+      if (!coordinates || !coordinates[0]) {
+        labelLayerRef.current?.clear();
+        return;
+      }
+      
+      const coords = coordinates[0];
+      if (coords.length < 1) {
+        labelLayerRef.current?.clear();
+        return;
+      }
 
-      updateDistanceLabels(coords);
+      if (coords.length >= 2) {
+          updateDistanceLabels(coords);
+      } else {
+          labelLayerRef.current?.clear();
+      }
       updateClosingHint(e.coordinate, coords[0]);
       setCurrentArea(formatArea(geometry.getArea()));
-    });
+    };
+
+    drawTool.on('drawvertex', handleDrawingProgress);
+    drawTool.on('mousemove', handleDrawingProgress);
 
     drawTool.on('drawend', (e: any) => {
+      if (!e.geometry) return;
       const newSegment: FieldSegment = {
         id: new Date().toISOString(),
         geometry: e.geometry.toJSON(),
