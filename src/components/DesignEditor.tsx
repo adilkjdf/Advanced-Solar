@@ -43,6 +43,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   const handleMouseMove = useCallback((e: any) => {
     if (activeTool !== 'draw' || !mapInstanceRef.current) return;
     const coord = e.coordinate;
+    if (!coord) return;
+
     if (!ghostMarkerRef.current) {
       ghostMarkerRef.current = new maptalks.Marker(coord, {
         symbol: { 'markerType': 'ellipse', 'markerFill': '#22c55e', 'markerWidth': 10, 'markerHeight': 10, 'markerLineWidth': 0 }
@@ -73,6 +75,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     if (!drawTool) return;
     drawTool.off();
     drawTool.on('drawstart', (e: any) => {
+      if (!e.coordinate) return;
       labelLayerRef.current?.clear();
       const startMarker = new maptalks.Marker(e.coordinate, {
         interactive: true,
