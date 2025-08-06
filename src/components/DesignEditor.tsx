@@ -21,8 +21,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       const map = new maptalks.Map(mapContainerRef.current, {
         center: [project.coordinates.lng, project.coordinates.lat],
         zoom: 19,
-        pitch: 60,
-        bearing: -25,
+        pitch: 0, // Set to 0 for top-down view
+        bearing: 0, // Set to 0 for North-up orientation
         dragRotate: true,
         baseLayer: new maptalks.TileLayer('base', {
           urlTemplate: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
