@@ -174,6 +174,21 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         const vertexMarker = new maptalks.Marker(e.coordinate, {
           symbol: { 'markerType': 'ellipse', 'markerFill': '#ffffff', 'markerWidth': 8, 'markerHeight': 8, 'markerLineWidth': 2, 'markerLineColor': '#f97316' }
         }).addTo(labelLayerRef.current!);
+        
+        // Add real-time distance label for the new segment
+        const coords = e.geometry.getCoordinates()[0];
+        if (coords.length >= 2) {
+          const line = new maptalks.LineString([coords[coords.length - 2], coords[coords.length - 1]]);
+          const distance = line.getLength();
+          const label = new maptalks.Label(formatDistance(distance), line.getCenter(), {
+            'textPlacement' : 'line',
+            'textDy': -15,
+            'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
+            'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
+          });
+          label.setProperties({ isDistanceLabel: true });
+          labelLayerRef.current!.addGeometry(label);
+        }
       }
     });
     drawTool.on('drawend', (e: any) => {
