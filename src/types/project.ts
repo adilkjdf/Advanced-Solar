@@ -1,7 +1,10 @@
 export interface Design {
   id: string;
-  name:string;
+  name: string;
   clonedFrom?: string;
+  project_id: string;
+  user_id: string;
+  created_at: string;
 }
 
 export interface FieldSegment {
@@ -11,6 +14,7 @@ export interface FieldSegment {
 }
 
 export interface ProjectData {
+  id: string;
   projectName: string;
   description: string;
   address: string;
@@ -20,6 +24,8 @@ export interface ProjectData {
     lng: number;
   };
   designs?: Design[];
+  user_id: string;
+  created_at: string;
 }
 
 export interface ValidationErrors {

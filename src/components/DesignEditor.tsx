@@ -49,7 +49,17 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     }
 
     const currentGeom = drawToolRef.current?.getCurrentGeometry();
-    if (!currentGeom) return;
+    if (!currentGeom) {
+        // If drawing hasn't started, just move the ghost marker
+        if (!ghostMarkerRef.current) {
+            ghostMarkerRef.current = new maptalks.Marker(coord, {
+              symbol: { 'markerType': 'ellipse', 'markerFill': '#22c55e', 'markerWidth': 10, 'markerHeight': 10, 'markerLineWidth': 0 }
+            }).addTo(labelLayerRef.current!);
+          } else {
+            ghostMarkerRef.current.setCoordinates(coord);
+          }
+        return;
+    };
 
     const coords = currentGeom.getCoordinates()[0];
     let isSnapped = false;
@@ -70,13 +80,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     }
 
     // Update ghost marker
-    if (!ghostMarkerRef.current) {
-      ghostMarkerRef.current = new maptalks.Marker(coord, {
-        symbol: { 'markerType': 'ellipse', 'markerFill': '#22c55e', 'markerWidth': 10, 'markerHeight': 10, 'markerLineWidth': 0 }
-      }).addTo(labelLayerRef.current!);
-    } else {
-      ghostMarkerRef.current.setCoordinates(coord);
-    }
+    ghostMarkerRef.current?.setCoordinates(coord);
 
     // Update temporary line and label
     if (coords.length > 0) {
@@ -100,7 +104,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   const updateDistanceLabels = useCallback((geometry: maptalks.Polygon) => {
     if (!geometry || !labelLayerRef.current) return;
     
-    // Find and remove only the permanent distance labels
     const oldLabels = labelLayerRef.current.getGeometries().filter(g => g.getProperties() && g.getProperties().isDistanceLabel);
     if (oldLabels.length) {
       labelLayerRef.current.removeGeometry(oldLabels);
@@ -114,7 +117,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
         'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
       });
-      // Add a property to identify these labels
       label.setProperties({ isDistanceLabel: true });
       labelLayerRef.current.addGeometry(label);
     }
@@ -125,12 +127,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     if (!drawTool) return;
     drawTool.off();
     drawTool.on('drawstart', (e: any) => {
-      const coord = e.coordinate;
-      if (!coord || typeof coord.x !== 'number' || typeof coord.y !== 'number') {
-        return;
-      }
-      // Do not clear the layer here, as it removes the ghost marker
-      const startMarker = new maptalks.Marker(coord, {
+      ghostMarkerRef.current?.remove();
+      const startMarker = new maptalks.Marker(e.coordinate, {
         interactive: true,
         symbol: {
           markerFile: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>'),
@@ -153,7 +151,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         setCurrentArea(formatArea(e.geometry.getArea()));
         updateDistanceLabels(e.geometry);
 
-        // Add a marker for the new vertex
         const vertexMarker = new maptalks.Marker(e.coordinate, {
           symbol: { 'markerType': 'ellipse', 'markerFill': '#ffffff', 'markerWidth': 8, 'markerHeight': 8, 'markerLineWidth': 2, 'markerLineColor': '#f97316' }
         }).addTo(labelLayerRef.current!);
@@ -225,7 +222,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     const handleDeleteClick = (e: any) => handleDeleteSegment(e.target.getId());
 
-    // Set up the new tool's state
     if (activeTool === 'draw') {
       map.getContainer().style.cursor = 'crosshair';
       map.on('mousemove', handleMouseMove);
@@ -249,7 +245,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       });
     }
 
-    // Return a cleanup function to reset tool state
     return () => {
       drawTool.disable();
       map.off('mousemove', handleMouseMove);

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, MapPin, Settings, Eye, Share2, FileText, Plus, Download, Trash2, Edit } from 'lucide-react';
+import { ArrowLeft, MapPin, Settings, Eye, Share2, FileText, Plus, Trash2, Edit } from 'lucide-react';
 import { ProjectData, Design } from '../types/project';
 import * as maptalks from 'maptalks';
 import NewDesignModal from './NewDesignModal';
 import DesignEditor from './DesignEditor';
+import { supabase } from '../integrations/supabase/client';
+import { useAuth } from '../contexts/AuthProvider';
 
 interface ProjectPageProps {
   project: ProjectData;
@@ -13,13 +15,28 @@ interface ProjectPageProps {
 type TabType = 'designs' | 'conditions' | 'shading' | 'sharing' | 'reports';
 
 const ProjectPage: React.FC<ProjectPageProps> = ({ project, onBack }) => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('designs');
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<maptalks.Map | null>(null);
 
-  const [designs, setDesigns] = useState<Design[]>(project.designs || []);
+  const [designs, setDesigns] = useState<Design[]>([]);
   const [isNewDesignModalOpen, setIsNewDesignModalOpen] = useState(false);
   const [editingDesign, setEditingDesign] = useState<Design | null>(null);
+
+  useEffect(() => {
+    const fetchDesigns = async () => {
+      const { data, error } = await supabase
+        .from('designs')
+        .select('*')
+        .eq('project_id', project.id)
+        .order('created_at', { ascending: false });
+      
+      if (error) console.error("Error fetching designs", error);
+      else setDesigns(data as Design[]);
+    };
+    fetchDesigns();
+  }, [project.id]);
 
   const tabs = [
     { id: 'designs' as TabType, label: 'Designs', icon: Settings },
@@ -29,14 +46,25 @@ const ProjectPage: React.FC<ProjectPageProps> = ({ project, onBack }) => {
     { id: 'reports' as TabType, label: 'Reports', icon: FileText },
   ];
 
-  const handleCreateDesign = (data: { name: string; cloneFrom?: string }) => {
-    const newDesign: Design = {
-      id: new Date().toISOString(),
-      name: data.name,
-      clonedFrom: data.cloneFrom,
-    };
-    setDesigns(prev => [...prev, newDesign]);
-    setIsNewDesignModalOpen(false);
+  const handleCreateDesign = async (data: { name: string; cloneFrom?: string }) => {
+    if (!user) return;
+    const { data: newDesign, error } = await supabase
+      .from('designs')
+      .insert({
+        name: data.name,
+        project_id: project.id,
+        user_id: user.id,
+        cloned_from: data.cloneFrom || null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error creating design", error);
+    } else if (newDesign) {
+      setDesigns(prev => [newDesign as Design, ...prev]);
+      setIsNewDesignModalOpen(false);
+    }
   };
 
   useEffect(() => {
@@ -111,7 +139,7 @@ const ProjectPage: React.FC<ProjectPageProps> = ({ project, onBack }) => {
                       >
                         {design.name}
                       </a>
-                      <div className="text-sm text-gray-600">{new Date().toLocaleDateString()}</div>
+                      <div className="text-sm text-gray-600">{new Date(design.created_at).toLocaleDateString()}</div>
                       <div className="text-sm text-gray-600">-</div>
                       <div className="flex space-x-2 justify-end">
                         <button onClick={() => setEditingDesign(design)} className="p-2 text-gray-500 hover:text-blue-600 rounded-md hover:bg-gray-100">
@@ -128,7 +156,6 @@ const ProjectPage: React.FC<ProjectPageProps> = ({ project, onBack }) => {
             </div>
           </div>
         );
-      // ... other cases remain the same
       default:
         return null;
     }
@@ -175,33 +202,12 @@ const ProjectPage: React.FC<ProjectPageProps> = ({ project, onBack }) => {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700">Owner</label>
-                  <p className="text-sm text-gray-900">{project.projectName}</p>
+                  <p className="text-sm text-gray-900">{user?.email}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700">Last Modified</label>
-                  <p className="text-sm text-gray-900">Today at {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                  <p className="text-sm text-gray-900">{new Date(project.created_at).toLocaleString()}</p>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Location</label>
-                  <p className="text-sm text-gray-900">
-                    ({project.coordinates?.lat.toFixed(4)}, {project.coordinates?.lng.toFixed(4)}) (GMT-5.0)
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Profile</label>
-                  <p className="text-sm text-gray-900">Default {project.projectType}</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-              <div className="p-4 border-b">
-                <h4 className="font-medium text-gray-900 flex items-center">
-                  <MapPin className="w-4 h-4 mr-2 text-orange-500" />
-                  Project Location
-                </h4>
-              </div>
-              <div className="h-64">
-                <div ref={mapContainerRef} className="h-full w-full" />
               </div>
             </div>
           </div>

@@ -1,11 +1,13 @@
 import React from 'react';
 import { Plus, FolderOpen, Users, Zap, TrendingUp } from 'lucide-react';
+import { ProjectData } from '../types/project';
 
 interface DashboardHomeProps {
   onCreateProject: () => void;
+  projects: ProjectData[];
 }
 
-const DashboardHome: React.FC<DashboardHomeProps> = ({ onCreateProject }) => {
+const DashboardHome: React.FC<DashboardHomeProps> = ({ onCreateProject, projects }) => {
   return (
     <div className="max-w-7xl mx-auto p-6">
       {/* Welcome Section */}
@@ -32,49 +34,14 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ onCreateProject }) => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Projects</p>
-              <p className="text-2xl font-bold text-gray-900">0</p>
+              <p className="text-2xl font-bold text-gray-900">{projects.length}</p>
             </div>
             <div className="p-3 bg-blue-100 rounded-lg">
               <FolderOpen className="w-6 h-6 text-blue-600" />
             </div>
           </div>
         </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total Capacity</p>
-              <p className="text-2xl font-bold text-gray-900">0 kW</p>
-            </div>
-            <div className="p-3 bg-yellow-100 rounded-lg">
-              <Zap className="w-6 h-6 text-yellow-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Active Customers</p>
-              <p className="text-2xl font-bold text-gray-900">0</p>
-            </div>
-            <div className="p-3 bg-green-100 rounded-lg">
-              <Users className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Growth</p>
-              <p className="text-2xl font-bold text-gray-900">+0%</p>
-            </div>
-            <div className="p-3 bg-purple-100 rounded-lg">
-              <TrendingUp className="w-6 h-6 text-purple-600" />
-            </div>
-          </div>
-        </div>
+        {/* Other stat cards can be updated later */}
       </div>
 
       {/* Recent Projects */}
@@ -83,43 +50,35 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ onCreateProject }) => {
           <h2 className="text-xl font-semibold text-gray-900">Recent Projects</h2>
         </div>
         <div className="p-6">
-          <div className="text-center py-12">
-            <FolderOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No projects yet</h3>
-            <p className="text-gray-500 mb-6">Get started by creating your first solar project.</p>
-            <button
-              onClick={onCreateProject}
-              className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 
-                         transition-colors flex items-center space-x-2 mx-auto"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create Project</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Features Overview */}
-      <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Solar Design</h3>
-          <p className="text-gray-600 text-sm">
-            Create precise solar array layouts with advanced shading analysis and performance optimization.
-          </p>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Financial Analysis</h3>
-          <p className="text-gray-600 text-sm">
-            Generate detailed financial models with ROI calculations, payback periods, and cash flow analysis.
-          </p>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Project Management</h3>
-          <p className="text-gray-600 text-sm">
-            Track project progress, manage customer communications, and organize project documentation.
-          </p>
+          {projects.length === 0 ? (
+            <div className="text-center py-12">
+              <FolderOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No projects yet</h3>
+              <p className="text-gray-500 mb-6">Get started by creating your first solar project.</p>
+              <button
+                onClick={onCreateProject}
+                className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 
+                           transition-colors flex items-center space-x-2 mx-auto"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Project</span>
+              </button>
+            </div>
+          ) : (
+            <ul className="space-y-4">
+              {projects.slice(0, 5).map(project => (
+                <li key={project.id} className="p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold text-gray-800">{project.projectName}</p>
+                      <p className="text-sm text-gray-500">{project.address}</p>
+                    </div>
+                    <p className="text-sm text-gray-500">{new Date(project.created_at).toLocaleDateString()}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     </div>
