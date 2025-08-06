@@ -77,22 +77,26 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     // Check if we're close to the starting point for closure
     const firstVertex = coords[0];
-    // Calculate distance using maptalks.Coordinate.distanceTo
-    const distance = firstVertex.distanceTo(coord);
-    const snapThreshold = 15 * mapInstanceRef.current.getScale() / 1000; // Convert pixels to map units
+    // Make sure firstVertex is a valid coordinate object
+    if (firstVertex && typeof firstVertex.x === 'number' && typeof firstVertex.y === 'number' &&
+        coord && typeof coord.x === 'number' && typeof coord.y === 'number') {
+      // Calculate distance using maptalks.Coordinate.distanceTo
+      const distance = firstVertex.distanceTo(coord);
+      const snapThreshold = 15 * mapInstanceRef.current.getScale() / 1000; // Convert pixels to map units
 
-    if (coords.length > 2 && distance < snapThreshold) {
-      coord = firstVertex;
-      isClosingRef.current = true;
-      currentGeom.setSymbol(closingSymbol);
-      if (startMarkerRef.current) {
-        startMarkerRef.current.setSymbol(startMarkerHoverSymbol);
-      }
-    } else {
-      isClosingRef.current = false;
-      currentGeom.setSymbol(defaultSymbol);
-      if (startMarkerRef.current) {
-        startMarkerRef.current.setSymbol(startMarkerSymbol);
+      if (coords.length > 2 && distance < snapThreshold) {
+        coord = firstVertex;
+        isClosingRef.current = true;
+        currentGeom.setSymbol(closingSymbol);
+        if (startMarkerRef.current) {
+          startMarkerRef.current.setSymbol(startMarkerHoverSymbol);
+        }
+      } else {
+        isClosingRef.current = false;
+        currentGeom.setSymbol(defaultSymbol);
+        if (startMarkerRef.current) {
+          startMarkerRef.current.setSymbol(startMarkerSymbol);
+        }
       }
     }
 
