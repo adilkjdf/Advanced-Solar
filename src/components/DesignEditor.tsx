@@ -6,6 +6,7 @@ import { ProjectData, Design, FieldSegment } from '../types/project';
 import { ArrowLeft, Check, RotateCcw, RotateCw, Settings, LayoutGrid, Crosshair, GitBranch, PlusCircle, Plus, Trash2 } from 'lucide-react';
 import { formatArea, formatDistance } from '../utils/mapUtils';
 import CreateFieldSegmentPanel from './CreateFieldSegmentPanel';
+import DrawingToolbar, { EditorTool } from './DrawingToolbar';
 
 interface DesignEditorProps {
   project: ProjectData;
@@ -16,9 +17,10 @@ interface DesignEditorProps {
 const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<maptalks.Map | null>(null);
-  const [activeTab, setActiveTab] = useState('mechanical');
   
-  const [isDrawing, setIsDrawing] = useState(false);
+  const [activeSidebarTab, setActiveSidebarTab] = useState('mechanical');
+  const [activeTool, setActiveTool] = useState<EditorTool>('none');
+  
   const [fieldSegments, setFieldSegments] = useState<FieldSegment[]>([]);
   const [currentArea, setCurrentArea] = useState('0.0 ft²');
 
@@ -26,26 +28,21 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   const segmentLayerRef = useRef<maptalks.VectorLayer | null>(null);
   const labelLayerRef = useRef<maptalks.VectorLayer | null>(null);
   
-  // Refs for real-time drawing feedback
   const ghostMarkerRef = useRef<maptalks.Marker | null>(null);
   const tempLineRef = useRef<maptalks.LineString | null>(null);
   const tempLabelRef = useRef<maptalks.Label | null>(null);
 
   const defaultSymbol = {
-    lineColor: '#f97316', // Orange
+    lineColor: '#f97316',
     lineWidth: 3,
     polygonFill: '#f97316',
     polygonOpacity: 0.3,
   };
-
-  const closingSymbol = { ...defaultSymbol, lineColor: '#22c55e' }; // Green
+  const closingSymbol = { ...defaultSymbol, lineColor: '#22c55e' };
 
   const handleMouseMove = useCallback((e: any) => {
-    if (!isDrawing || !mapInstanceRef.current) return;
-
+    if (activeTool !== 'draw' || !mapInstanceRef.current) return;
     const coord = e.coordinate;
-
-    // Update ghost marker position (the green dot)
     if (!ghostMarkerRef.current) {
       ghostMarkerRef.current = new maptalks.Marker(coord, {
         symbol: { 'markerType': 'ellipse', 'markerFill': '#22c55e', 'markerWidth': 10, 'markerHeight': 10, 'markerLineWidth': 0 }
@@ -53,110 +50,30 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     } else {
       ghostMarkerRef.current.setCoordinates(coord);
     }
-
-    // Update real-time distance line and label
     const currentGeom = drawToolRef.current?.getCurrentGeometry();
     if (!currentGeom) return;
-
     const coords = currentGeom.getCoordinates()[0];
     if (coords.length === 0) return;
-
     const lastVertex = coords[coords.length - 1];
     if (tempLineRef.current) tempLineRef.current.remove();
     if (tempLabelRef.current) tempLabelRef.current.remove();
-
-    // Create a solid orange preview line
     tempLineRef.current = new maptalks.LineString([lastVertex, coord], {
-      symbol: { 
-        'lineColor': '#f97316', // Solid orange line
-        'lineWidth': 3 
-      }
+      symbol: { 'lineColor': '#f97316', 'lineWidth': 3 }
     }).addTo(labelLayerRef.current!);
-
     const distance = tempLineRef.current.getLength();
     const midPoint = tempLineRef.current.getCenter();
     tempLabelRef.current = new maptalks.Label(formatDistance(distance), midPoint, {
       'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
       'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
     }).addTo(labelLayerRef.current!);
-  }, [isDrawing]);
+  }, [activeTool]);
 
-  useEffect(() => {
-    if (mapContainerRef.current && !mapInstanceRef.current && project.coordinates) {
-      const map = new maptalks.Map(mapContainerRef.current, {
-        center: [project.coordinates.lng, project.coordinates.lat],
-        zoom: 19,
-        pitch: 0,
-        bearing: 0,
-        dragRotate: true,
-        baseLayer: new maptalks.TileLayer('base', {
-          urlTemplate: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
-        }),
-      });
-      mapInstanceRef.current = map;
-
-      segmentLayerRef.current = new maptalks.VectorLayer('fieldSegments').addTo(map);
-      labelLayerRef.current = new maptalks.VectorLayer('labels').addTo(map);
-      drawToolRef.current = new maptalks.DrawTool({ 
-        mode: 'Polygon',
-        symbol: defaultSymbol
-      }).addTo(map);
-      
-      setupDrawingListeners();
-
-      const threeLayer = new ThreeLayer('three', { forceRenderOnMoving: true, forceRenderOnRotating: true });
-      threeLayer.prepareToDraw = (gl, scene) => {
-        const light = new THREE.DirectionalLight(0xffffff);
-        light.position.set(0, -10, 10).normalize();
-        scene.add(light);
-      };
-      map.addLayer(threeLayer);
-
-      return () => {
-        if (mapInstanceRef.current) {
-          mapInstanceRef.current.remove();
-          mapInstanceRef.current = null;
-        }
-      };
-    }
-  }, [project.coordinates]);
-
-  const updateDistanceLabels = (geometry: maptalks.Polygon) => {
-    if (!geometry || !mapInstanceRef.current || !labelLayerRef.current) return;
-    
-    const tempLabelLayer = labelLayerRef.current;
-    const labels = tempLabelLayer.getGeometries().filter(g => g instanceof maptalks.Label && !g.isDrag) as maptalks.Label[];
-    if (labels.length) {
-        tempLabelLayer.removeGeometry(labels);
-    }
-
-    const coords = geometry.getCoordinates()[0];
-    if (coords.length < 2) return;
-
-    for (let i = 0; i < coords.length - 1; i++) {
-        const p1 = coords[i];
-        const p2 = coords[i + 1];
-        const line = new maptalks.LineString([p1, p2]);
-        const distance = line.getLength();
-        const midPoint = line.getCenter();
-        
-        const label = new maptalks.Label(formatDistance(distance), midPoint, {
-            'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
-            'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
-        });
-        tempLabelLayer.addGeometry(label);
-    }
-  };
-
-  const setupDrawingListeners = () => {
+  const setupDrawingListeners = useCallback(() => {
     const drawTool = drawToolRef.current;
     if (!drawTool) return;
-
     drawTool.off();
-
     drawTool.on('drawstart', (e: any) => {
       labelLayerRef.current?.clear();
-      
       const startMarker = new maptalks.Marker(e.coordinate, {
         interactive: true,
         symbol: {
@@ -164,7 +81,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
           markerWidth: 20, markerHeight: 20,
         }
       });
-
       startMarker.on('mousedown', (evt) => {
         const currentGeom = drawToolRef.current?.getCurrentGeometry();
         if (currentGeom && currentGeom.getCoordinates()[0].length > 2) {
@@ -179,75 +95,139 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         }
       });
       startMarker.on('mouseout', () => drawToolRef.current!.setSymbol(defaultSymbol));
-
       labelLayerRef.current?.addGeometry(startMarker);
     });
-
     drawTool.on('drawvertex', (e: any) => {
-        if (e.geometry) {
-            if (tempLineRef.current) tempLineRef.current.remove();
-            if (tempLabelRef.current) tempLabelRef.current.remove();
-            setCurrentArea(formatArea(e.geometry.getArea()));
-            updateDistanceLabels(e.geometry);
-        }
+      if (e.geometry) {
+        if (tempLineRef.current) tempLineRef.current.remove();
+        if (tempLabelRef.current) tempLabelRef.current.remove();
+        setCurrentArea(formatArea(e.geometry.getArea()));
+        updateDistanceLabels(e.geometry);
+      }
     });
-
     drawTool.on('drawend', (e: any) => {
       if (!e.geometry) return;
-      const newSegmentId = new Date().toISOString();
       const newSegment: FieldSegment = {
-        id: newSegmentId,
+        id: new Date().toISOString(),
         geometry: e.geometry.toJSON(),
         area: e.geometry.getArea(),
       };
-      
-      // Use a different symbol for the final polygon to distinguish from the preview
-      const finalSymbol = { ...defaultSymbol, polygonOpacity: 0.3 };
-      const polygon = e.geometry.copy().setSymbol(finalSymbol).setId(newSegmentId);
+      const polygon = maptalks.Geometry.fromJSON(newSegment.geometry).setSymbol(defaultSymbol).setId(newSegment.id);
       segmentLayerRef.current?.addGeometry(polygon);
       setFieldSegments(prev => [...prev, newSegment]);
-      
-      endDrawing();
+      setActiveTool('none');
     });
-  };
+  }, []);
 
-  const startDrawing = () => {
-    setIsDrawing(true);
-    mapContainerRef.current?.style.setProperty('cursor', 'crosshair');
-    mapInstanceRef.current?.on('mousemove', handleMouseMove);
-    drawToolRef.current?.enable();
-  };
+  useEffect(() => {
+    if (mapContainerRef.current && !mapInstanceRef.current && project.coordinates) {
+      const map = new maptalks.Map(mapContainerRef.current, {
+        center: [project.coordinates.lng, project.coordinates.lat],
+        zoom: 19, pitch: 0, bearing: 0, dragRotate: true,
+        baseLayer: new maptalks.TileLayer('base', { urlTemplate: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}' }),
+      });
+      mapInstanceRef.current = map;
+      segmentLayerRef.current = new maptalks.VectorLayer('fieldSegments').addTo(map);
+      labelLayerRef.current = new maptalks.VectorLayer('labels').addTo(map);
+      drawToolRef.current = new maptalks.DrawTool({ mode: 'Polygon', symbol: defaultSymbol }).addTo(map);
+      setupDrawingListeners();
+      const threeLayer = new ThreeLayer('three', { forceRenderOnMoving: true, forceRenderOnRotating: true });
+      threeLayer.prepareToDraw = (gl, scene) => {
+        const light = new THREE.DirectionalLight(0xffffff);
+        light.position.set(0, -10, 10).normalize();
+        scene.add(light);
+      };
+      map.addLayer(threeLayer);
+      return () => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.remove();
+          mapInstanceRef.current = null;
+        }
+      };
+    }
+  }, [project.coordinates, setupDrawingListeners]);
 
-  const endDrawing = () => {
-    setIsDrawing(false);
-    mapContainerRef.current?.style.setProperty('cursor', 'grab');
-    mapInstanceRef.current?.off('mousemove', handleMouseMove);
-    drawToolRef.current?.disable();
-    
-    if (ghostMarkerRef.current) ghostMarkerRef.current.remove();
-    if (tempLineRef.current) tempLineRef.current.remove();
-    if (tempLabelRef.current) tempLabelRef.current.remove();
-    ghostMarkerRef.current = tempLineRef.current = tempLabelRef.current = null;
-
-    labelLayerRef.current?.clear();
-    setCurrentArea('0.0 ft²');
+  const updateDistanceLabels = (geometry: maptalks.Polygon) => {
+    if (!geometry || !labelLayerRef.current) return;
+    const labels = labelLayerRef.current.getGeometries().filter(g => g instanceof maptalks.Label && !g.isDrag) as maptalks.Label[];
+    if (labels.length) labelLayerRef.current.removeGeometry(labels);
+    const coords = geometry.getCoordinates()[0];
+    if (coords.length < 2) return;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const line = new maptalks.LineString([coords[i], coords[i + 1]]);
+      const label = new maptalks.Label(formatDistance(line.getLength()), line.getCenter(), {
+        'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
+        'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
+      });
+      labelLayerRef.current.addGeometry(label);
+    }
   };
 
   const clearCurrentShape = () => {
     drawToolRef.current?.clear();
     labelLayerRef.current?.clear();
     setCurrentArea('0.0 ft²');
-    setupDrawingListeners(); // Re-add start marker
+    setupDrawingListeners();
   };
 
   const handleDeleteSegment = (segmentId: string) => {
     const segmentLayer = segmentLayerRef.current;
     if (segmentLayer) {
-        const geometryToRemove = segmentLayer.getGeometryById(segmentId);
-        if (geometryToRemove) geometryToRemove.remove();
+      const geometryToRemove = segmentLayer.getGeometryById(segmentId);
+      if (geometryToRemove) geometryToRemove.remove();
     }
     setFieldSegments(prev => prev.filter(s => s.id !== segmentId));
   };
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const drawTool = drawToolRef.current;
+    const segmentLayer = segmentLayerRef.current;
+    if (!map || !drawTool || !segmentLayer) return;
+
+    const handleDeleteClick = (e: any) => handleDeleteSegment(e.target.getId());
+
+    const cleanup = () => {
+      drawTool.disable();
+      map.off('mousemove', handleMouseMove);
+      segmentLayer.getGeometries().forEach((geom: any) => {
+        if (geom.isEditing()) geom.endEdit();
+        geom.off('click', handleDeleteClick);
+        geom.off('editend');
+      });
+      map.getContainer().style.cursor = 'grab';
+      if (ghostMarkerRef.current) ghostMarkerRef.current.remove();
+      if (tempLineRef.current) tempLineRef.current.remove();
+      if (tempLabelRef.current) tempLabelRef.current.remove();
+      ghostMarkerRef.current = tempLineRef.current = tempLabelRef.current = null;
+      labelLayerRef.current?.clear();
+    };
+    cleanup();
+
+    if (activeTool === 'draw') {
+      map.getContainer().style.cursor = 'crosshair';
+      map.on('mousemove', handleMouseMove);
+      drawTool.setMode('Polygon').enable();
+    } else if (activeTool === 'edit') {
+      segmentLayer.getGeometries().forEach((geom: any) => {
+        geom.startEdit();
+        geom.on('editend', (e: any) => {
+          const editedGeoJSON = e.target.toJSON();
+          setFieldSegments(prev => prev.map(seg =>
+            seg.id === e.target.getId()
+              ? { ...seg, geometry: editedGeoJSON, area: e.target.getArea() }
+              : seg
+          ));
+        });
+      });
+    } else if (activeTool === 'delete') {
+      map.getContainer().style.cursor = 'pointer';
+      segmentLayer.getGeometries().forEach((geom: any) => {
+        geom.on('click', handleDeleteClick);
+      });
+    }
+    return cleanup;
+  }, [activeTool, fieldSegments, handleMouseMove]);
 
   const sidebarTabs = [
     { id: 'mechanical', label: 'Mechanical', icon: LayoutGrid },
@@ -258,9 +238,9 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
   return (
     <div className="w-screen h-screen flex bg-gray-800">
-      <div className="w-80 bg-white shadow-2xl flex flex-col z-10">
-        {isDrawing ? (
-          <CreateFieldSegmentPanel onBack={endDrawing} onClear={clearCurrentShape} area={currentArea} />
+      <div className="w-80 bg-white shadow-2xl flex flex-col z-20">
+        {activeTool === 'draw' ? (
+          <CreateFieldSegmentPanel onBack={() => setActiveTool('none')} onClear={clearCurrentShape} area={currentArea} />
         ) : (
           <>
             <div className="p-4 border-b">
@@ -279,7 +259,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
             <div className="p-4 border-b">
               <div className="grid grid-cols-2 gap-2">
                 {sidebarTabs.map(tab => (
-                  <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col items-center justify-center p-2 rounded-lg transition-colors ${activeTab === tab.id ? 'bg-orange-100 text-orange-600' : 'hover:bg-gray-100'}`}>
+                  <button key={tab.id} onClick={() => setActiveSidebarTab(tab.id)} className={`flex flex-col items-center justify-center p-2 rounded-lg transition-colors ${activeSidebarTab === tab.id ? 'bg-orange-100 text-orange-600' : 'hover:bg-gray-100'}`}>
                     <tab.icon className="w-6 h-6 mb-1" />
                     <span className="text-xs font-medium">{tab.label}</span>
                   </button>
@@ -289,7 +269,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
             <div className="flex-grow p-4 overflow-y-auto">
               <div className="flex justify-between items-center mb-3">
                 <h3 className="font-bold text-gray-800">Field Segments</h3>
-                <button onClick={startDrawing} className="bg-orange-500 text-white px-3 py-1 rounded-md text-sm font-semibold hover:bg-orange-600 flex items-center space-x-1">
+                <button onClick={() => setActiveTool('draw')} className="bg-orange-500 text-white px-3 py-1 rounded-md text-sm font-semibold hover:bg-orange-600 flex items-center space-x-1">
                   <Plus className="w-4 h-4" />
                   <span>New</span>
                 </button>
@@ -297,7 +277,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
               <div className="border-t pt-4">
                 {fieldSegments.length === 0 ? (
                   <div className="text-center py-6 text-sm text-gray-500">
-                    <a href="#" onClick={(e) => { e.preventDefault(); startDrawing(); }} className="text-blue-600 hover:underline">Add a field segment</a> to get started
+                    <a href="#" onClick={(e) => { e.preventDefault(); setActiveTool('draw'); }} className="text-blue-600 hover:underline">Add a field segment</a> to get started
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -321,10 +301,11 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       </div>
       <div className="flex-1 relative">
         <div ref={mapContainerRef} className="w-full h-full" />
-        <button onClick={onBack} className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm text-gray-800 font-semibold px-4 py-2 rounded-lg shadow-lg hover:bg-white flex items-center space-x-2">
+        <button onClick={onBack} className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm text-gray-800 font-semibold px-4 py-2 rounded-lg shadow-lg hover:bg-white flex items-center space-x-2 z-10">
           <ArrowLeft className="w-5 h-5" />
           <span>Back to Project</span>
         </button>
+        <DrawingToolbar activeTool={activeTool} onToolSelect={setActiveTool} />
       </div>
     </div>
   );
