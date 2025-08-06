@@ -43,11 +43,33 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
   const handleMouseMove = useCallback((e: any) => {
     if (activeTool !== 'draw' || !mapInstanceRef.current) return;
-    const coord = e.coordinate;
+    let coord = e.coordinate;
     if (!coord || typeof coord.x !== 'number' || typeof coord.y !== 'number') {
       return;
     }
 
+    const currentGeom = drawToolRef.current?.getCurrentGeometry();
+    if (!currentGeom) return;
+
+    const coords = currentGeom.getCoordinates()[0];
+    let isSnapped = false;
+
+    // Snapping logic
+    if (coords.length > 2) {
+      const firstVertex = coords[0];
+      const distance = mapInstanceRef.current.distanceTo(coord, firstVertex);
+      const snapThreshold = mapInstanceRef.current.getResolution() * 15; // 15 pixels threshold
+
+      if (distance < snapThreshold) {
+        coord = firstVertex;
+        isSnapped = true;
+        currentGeom.setSymbol(closingSymbol);
+      } else {
+        currentGeom.setSymbol(defaultSymbol);
+      }
+    }
+
+    // Update ghost marker
     if (!ghostMarkerRef.current) {
       ghostMarkerRef.current = new maptalks.Marker(coord, {
         symbol: { 'markerType': 'ellipse', 'markerFill': '#22c55e', 'markerWidth': 10, 'markerHeight': 10, 'markerLineWidth': 0 }
@@ -55,27 +77,24 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     } else {
       ghostMarkerRef.current.setCoordinates(coord);
     }
-    const currentGeom = drawToolRef.current?.getCurrentGeometry();
-    if (!currentGeom) return;
-    const coords = currentGeom.getCoordinates()[0];
-    if (coords.length === 0) return;
-    
-    const lastVertex = coords[coords.length - 1];
-    if (!lastVertex || typeof lastVertex.x !== 'number' || typeof lastVertex.y !== 'number') {
-        return;
-    }
 
-    if (tempLineRef.current) tempLineRef.current.remove();
-    if (tempLabelRef.current) tempLabelRef.current.remove();
-    tempLineRef.current = new maptalks.LineString([lastVertex, coord], {
-      symbol: { 'lineColor': '#f97316', 'lineWidth': 3 }
-    }).addTo(labelLayerRef.current!);
-    const distance = tempLineRef.current.getLength();
-    const midPoint = tempLineRef.current.getCenter();
-    tempLabelRef.current = new maptalks.Label(formatDistance(distance), midPoint, {
-      'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
-      'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
-    }).addTo(labelLayerRef.current!);
+    // Update temporary line and label
+    if (coords.length > 0) {
+      const lastVertex = coords[coords.length - 1];
+      if (tempLineRef.current) tempLineRef.current.remove();
+      if (tempLabelRef.current) tempLabelRef.current.remove();
+
+      tempLineRef.current = new maptalks.LineString([lastVertex, coord], {
+        symbol: isSnapped ? closingSymbol : defaultSymbol
+      }).addTo(labelLayerRef.current!);
+      
+      const distance = tempLineRef.current.getLength();
+      const midPoint = tempLineRef.current.getCenter();
+      tempLabelRef.current = new maptalks.Label(formatDistance(distance), midPoint, {
+        'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
+        'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
+      }).addTo(labelLayerRef.current!);
+    }
   }, [activeTool]);
 
   const setupDrawingListeners = useCallback(() => {
@@ -102,13 +121,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
           drawToolRef.current!.endDraw();
         }
       });
-      startMarker.on('mouseover', () => {
-        const currentGeom = drawToolRef.current?.getCurrentGeometry();
-        if (currentGeom && currentGeom.getCoordinates()[0].length > 2) {
-          drawToolRef.current!.setSymbol(closingSymbol);
-        }
-      });
-      startMarker.on('mouseout', () => drawToolRef.current!.setSymbol(defaultSymbol));
       labelLayerRef.current?.addGeometry(startMarker);
     });
     drawTool.on('drawvertex', (e: any) => {
@@ -117,6 +129,11 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         if (tempLabelRef.current) tempLabelRef.current.remove();
         setCurrentArea(formatArea(e.geometry.getArea()));
         updateDistanceLabels(e.geometry);
+
+        // Add a marker for the new vertex
+        const vertexMarker = new maptalks.Marker(e.coordinate, {
+          symbol: { 'markerType': 'ellipse', 'markerFill': '#ffffff', 'markerWidth': 8, 'markerHeight': 8, 'markerLineWidth': 2, 'markerLineColor': '#f97316' }
+        }).addTo(labelLayerRef.current!);
       }
     });
     drawTool.on('drawend', (e: any) => {
