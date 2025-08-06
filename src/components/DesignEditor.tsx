@@ -36,14 +36,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
   const closingSymbol = { ...defaultSymbol, lineColor: '#22c55e' }; // Green
 
-  const vertexSymbol = {
-    'markerType': 'ellipse',
-    'markerFill': '#22c55e', // green
-    'markerWidth': 8,
-    'markerHeight': 8,
-    'markerLineWidth': 0
-  };
-
   useEffect(() => {
     if (mapContainerRef.current && !mapInstanceRef.current && project.coordinates) {
       const map = new maptalks.Map(mapContainerRef.current, {
@@ -133,7 +125,11 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       
       const startMarker = new maptalks.Marker(e.coordinate, {
         interactive: true,
-        symbol: vertexSymbol
+        symbol: {
+          markerFile: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>'),
+          markerWidth: 20,
+          markerHeight: 20,
+        }
       });
 
       startMarker.on('mousedown', (evt) => {
@@ -168,18 +164,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     drawTool.on('drawvertex', (e: any) => {
         if (e.geometry) {
-            const coords = e.geometry.getCoordinates()[0];
             setCurrentArea(formatArea(e.geometry.getArea()));
             updateDistanceLabels(e.geometry);
-
-            // Add non-interactive markers for all vertices *after* the first one.
-            if (coords.length > 1) {
-                const vertexMarker = new maptalks.Marker(e.coordinate, {
-                    interactive: false, // These are just visual aids
-                    symbol: vertexSymbol
-                });
-                labelLayerRef.current?.addGeometry(vertexMarker);
-            }
         }
     });
 
