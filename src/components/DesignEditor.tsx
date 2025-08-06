@@ -187,23 +187,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     const handleDeleteClick = (e: any) => handleDeleteSegment(e.target.getId());
 
-    const cleanup = () => {
-      drawTool.disable();
-      map.off('mousemove', handleMouseMove);
-      segmentLayer.getGeometries().forEach((geom: any) => {
-        if (geom.isEditing()) geom.endEdit();
-        geom.off('click', handleDeleteClick);
-        geom.off('editend');
-      });
-      map.getContainer().style.cursor = 'grab';
-      if (ghostMarkerRef.current) ghostMarkerRef.current.remove();
-      if (tempLineRef.current) tempLineRef.current.remove();
-      if (tempLabelRef.current) tempLabelRef.current.remove();
-      ghostMarkerRef.current = tempLineRef.current = tempLabelRef.current = null;
-      labelLayerRef.current?.clear();
-    };
-    cleanup();
-
+    // Set up the new tool's state
     if (activeTool === 'draw') {
       map.getContainer().style.cursor = 'crosshair';
       map.on('mousemove', handleMouseMove);
@@ -226,7 +210,29 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         geom.on('click', handleDeleteClick);
       });
     }
-    return cleanup;
+
+    // Return a cleanup function to reset tool state
+    return () => {
+      drawTool.disable();
+      map.off('mousemove', handleMouseMove);
+      
+      const container = map.getContainer();
+      if (container) {
+        container.style.cursor = 'grab';
+      }
+
+      segmentLayer.getGeometries().forEach((geom: any) => {
+        if (geom.isEditing()) geom.endEdit();
+        geom.off('click', handleDeleteClick);
+        geom.off('editend');
+      });
+
+      if (ghostMarkerRef.current) ghostMarkerRef.current.remove();
+      if (tempLineRef.current) tempLineRef.current.remove();
+      if (tempLabelRef.current) tempLabelRef.current.remove();
+      ghostMarkerRef.current = tempLineRef.current = tempLabelRef.current = null;
+      labelLayerRef.current?.clear();
+    };
   }, [activeTool, fieldSegments, handleMouseMove]);
 
   const sidebarTabs = [
