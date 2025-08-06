@@ -80,6 +80,11 @@ function App() {
     }
   };
 
+  const handleSelectProject = (project: ProjectData) => {
+    setCurrentProject(project);
+    setCurrentView('project');
+  };
+
   const handleBackToDashboard = () => {
     setCurrentView('dashboard');
     setCurrentProject(null);
@@ -94,6 +99,7 @@ function App() {
             onCreateProject={handleCreateProject} 
             projects={projects}
             onDeleteProject={handleDeleteProject}
+            onSelectProject={handleSelectProject}
           />
         ) : currentProject ? (
           <ProjectPage project={currentProject} onBack={handleBackToDashboard} />

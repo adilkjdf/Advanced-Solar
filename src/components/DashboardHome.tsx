@@ -6,9 +6,10 @@ interface DashboardHomeProps {
   onCreateProject: () => void;
   projects: ProjectData[];
   onDeleteProject: (id: string) => void;
+  onSelectProject: (project: ProjectData) => void;
 }
 
-const DashboardHome: React.FC<DashboardHomeProps> = ({ onCreateProject, projects, onDeleteProject }) => {
+const DashboardHome: React.FC<DashboardHomeProps> = ({ onCreateProject, projects, onDeleteProject, onSelectProject }) => {
   return (
     <div className="max-w-7xl mx-auto p-6">
       {/* Welcome Section */}
@@ -68,7 +69,11 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ onCreateProject, projects
           ) : (
             <ul className="space-y-4">
               {projects.slice(0, 5).map(project => (
-                <li key={project.id} className="p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                <li 
+                  key={project.id} 
+                  onClick={() => onSelectProject(project)}
+                  className="p-4 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                >
                   <div className="flex justify-between items-center">
                     <div>
                       <p className="font-semibold text-gray-800">{project.projectName}</p>
