@@ -115,7 +115,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     for (let i = 0; i < coords.length - 1; i++) {
       const p1 = coords[i];
       const p2 = coords[i + 1];
-      const distance = mapInstanceRef.current?.getProjection().measure(p1, p2) || 0;
+      const distance = mapInstanceRef.current?.computeDistance(p1, p2) || 0;
       const midPoint = new maptalks.Coordinate( (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 );
       
       const label = new maptalks.Label(formatDistance(distance), midPoint, {
@@ -139,7 +139,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
   const updateClosingHint = (currentCoord: maptalks.Coordinate, firstCoord: maptalks.Coordinate) => {
     if (!currentCoord || !firstCoord) return;
-    const distance = mapInstanceRef.current?.getProjection().measure(currentCoord, firstCoord) || Infinity;
+    const distance = mapInstanceRef.current?.computeDistance(currentCoord, firstCoord) || Infinity;
     const shouldShowHint = distance < 10; // 10 meters threshold
 
     if (shouldShowHint && !isClosingHintShownRef.current) {
