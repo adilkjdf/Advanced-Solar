@@ -117,9 +117,12 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     const drawTool = drawToolRef.current;
     if (!drawTool) return;
 
+    drawTool.off(); // Clear previous listeners to prevent duplicates
+
     drawTool.on('drawstart', (e: any) => {
       startPointRef.current = e.coordinate;
       labelLayerRef.current?.clear();
+      
       const startMarker = new maptalks.Marker(e.coordinate, {
         interactive: true,
         symbol: {
@@ -134,35 +137,29 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
           const currentGeom = drawToolRef.current.getCurrentGeometry();
           const canClose = currentGeom && currentGeom.getCoordinates()[0].length > 2;
           if (canClose) {
-            evt.domEvent.stopPropagation();
+            evt.stopPropagation();
             drawToolRef.current.endDraw();
           }
         }
       });
 
-      labelLayerRef.current?.addGeometry(startMarker);
-    });
-
-    drawTool.on('mousemove', (e: any) => {
-        if (!startPointRef.current || !mapInstanceRef.current) return;
-        
-        const map = mapInstanceRef.current;
-        const currentCoord = e.coordinate;
-        const startCoord = startPointRef.current;
-
-        const p1 = map.coordToContainerPoint(currentCoord);
-        const p2 = map.coordToContainerPoint(startCoord);
-        const distance = p1.distanceTo(p2);
-
-        const currentGeom = drawTool.getCurrentGeometry();
-        const canClose = currentGeom && currentGeom.getCoordinates()[0].length > 2;
-
-        const isNearStart = distance < 15 && canClose;
-        drawTool.setSymbol(isNearStart ? closingSymbol : defaultSymbol);
-
-        if (e.geometry) {
-            updateDistanceLabels(e.geometry);
+      startMarker.on('mouseover', () => {
+        if (drawToolRef.current) {
+            const currentGeom = drawToolRef.current.getCurrentGeometry();
+            const canClose = currentGeom && currentGeom.getCoordinates()[0].length > 2;
+            if (canClose) {
+                drawToolRef.current.setSymbol(closingSymbol);
+            }
         }
+      });
+
+      startMarker.on('mouseout', () => {
+        if (drawToolRef.current) {
+            drawToolRef.current.setSymbol(defaultSymbol);
+        }
+      });
+
+      labelLayerRef.current?.addGeometry(startMarker);
     });
 
     drawTool.on('drawvertex', (e: any) => {
