@@ -57,6 +57,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       setupDrawingListeners();
 
       const handleMapClick = (e: any) => {
+        if (!mapInstanceRef.current) return;
         const drawTool = drawToolRef.current;
         if (!drawTool || !drawTool.isEnabled()) return;
 
@@ -68,7 +69,10 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
         const firstCoord = coords[0];
         const clickCoord = e.coordinate;
-        const distance = map.computeDistance(clickCoord, firstCoord);
+        
+        const projection = mapInstanceRef.current.getProjection();
+        if (!projection) return;
+        const distance = maptalks.Geometry.computeDistance(clickCoord, firstCoord, projection);
 
         if (distance < 10) {
           drawTool.endDraw(e);
@@ -145,12 +149,16 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   };
 
   const updateDistanceLabels = (coords: maptalks.Coordinate[]) => {
+    if (!mapInstanceRef.current) return;
+    const projection = mapInstanceRef.current.getProjection();
+    if (!projection) return;
+
     labelLayerRef.current?.clear();
     // Loop up to the second to last vertex to draw labels only for committed segments
     for (let i = 0; i < coords.length - 2; i++) {
       const p1 = coords[i];
       const p2 = coords[i + 1];
-      const distance = mapInstanceRef.current?.computeDistance(p1, p2) || 0;
+      const distance = maptalks.Geometry.computeDistance(p1, p2, projection) || 0;
       const midPoint = new maptalks.Coordinate( (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 );
       
       const label = new maptalks.Label(formatDistance(distance), midPoint, {
@@ -173,8 +181,11 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   };
 
   const updateClosingHint = (currentCoord: maptalks.Coordinate, firstCoord: maptalks.Coordinate) => {
-    if (!currentCoord || !firstCoord) return;
-    const distance = mapInstanceRef.current?.computeDistance(currentCoord, firstCoord) || Infinity;
+    if (!mapInstanceRef.current || !currentCoord || !firstCoord) return;
+    const projection = mapInstanceRef.current.getProjection();
+    if (!projection) return;
+
+    const distance = maptalks.Geometry.computeDistance(currentCoord, firstCoord, projection) || Infinity;
     const shouldShowHint = distance < 10; // 10 meters threshold
 
     if (shouldShowHint && !isClosingHintShownRef.current) {
