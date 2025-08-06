@@ -36,27 +36,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
   const closingSymbol = { ...defaultSymbol, lineColor: '#22c55e' }; // Green
 
-  const handleMapClick = useCallback((e: any) => {
-    if (!isDrawing || !startPointRef.current || !mapInstanceRef.current || !drawToolRef.current) return;
-
-    const map = mapInstanceRef.current;
-    const clickCoord = e.coordinate;
-    const startCoord = startPointRef.current;
-
-    const p1 = map.coordToContainerPoint(clickCoord);
-    const p2 = map.coordToContainerPoint(startCoord);
-    const distance = p1.distanceTo(p2);
-
-    const currentGeom = drawToolRef.current?.getCurrentGeometry();
-    const canClose = currentGeom && currentGeom.getCoordinates()[0].length > 2;
-
-    if (distance < 15 && canClose) {
-      e.domEvent.preventDefault();
-      e.domEvent.stopPropagation();
-      drawToolRef.current?.endDraw();
-    }
-  }, [isDrawing]);
-
   useEffect(() => {
     if (mapContainerRef.current && !mapInstanceRef.current && project.coordinates) {
       const map = new maptalks.Map(mapContainerRef.current, {
@@ -90,13 +69,12 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
       return () => {
         if (mapInstanceRef.current) {
-          mapInstanceRef.current.off('click', handleMapClick);
           mapInstanceRef.current.remove();
           mapInstanceRef.current = null;
         }
       };
     }
-  }, [project.coordinates, handleMapClick]);
+  }, [project.coordinates]);
 
   const updateDistanceLabels = (geometry: maptalks.Polygon) => {
     if (!geometry || !mapInstanceRef.current || !labelLayerRef.current) return;
@@ -143,6 +121,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       startPointRef.current = e.coordinate;
       labelLayerRef.current?.clear();
       const startMarker = new maptalks.Marker(e.coordinate, {
+        interactive: false, // Make marker non-interactive so click passes through to the map
         symbol: {
           markerFile: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>'),
           markerWidth: 20,
@@ -150,7 +129,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         }
       });
       labelLayerRef.current?.addGeometry(startMarker);
-      mapInstanceRef.current?.on('click', handleMapClick);
     });
 
     drawTool.on('mousemove', (e: any) => {
@@ -206,7 +184,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   };
 
   const endDrawing = () => {
-    mapInstanceRef.current?.off('click', handleMapClick);
     setIsDrawing(false);
     startPointRef.current = null;
     labelLayerRef.current?.clear();
