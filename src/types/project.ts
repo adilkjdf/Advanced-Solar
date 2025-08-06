@@ -1,3 +1,9 @@
+export interface Design {
+  id: string;
+  name:string;
+  clonedFrom?: string;
+}
+
 export interface ProjectData {
   projectName: string;
   description: string;
@@ -7,6 +13,7 @@ export interface ProjectData {
     lat: number;
     lng: number;
   };
+  designs?: Design[];
 }
 
 export interface ValidationErrors {
