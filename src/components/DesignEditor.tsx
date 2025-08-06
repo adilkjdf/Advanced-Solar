@@ -4,7 +4,7 @@ import { ThreeLayer } from 'maptalks.three';
 import * as THREE from 'three';
 import { ProjectData, Design, FieldSegment } from '../types/project';
 import { ArrowLeft, Check, RotateCcw, RotateCw, Settings, LayoutGrid, Crosshair, GitBranch, PlusCircle, Plus } from 'lucide-react';
-import { formatDistance, formatArea } from '../utils/mapUtils';
+import { formatArea } from '../utils/mapUtils';
 import CreateFieldSegmentPanel from './CreateFieldSegmentPanel';
 
 interface DesignEditorProps {
@@ -24,8 +24,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
   const drawToolRef = useRef<maptalks.DrawTool | null>(null);
   const segmentLayerRef = useRef<maptalks.VectorLayer | null>(null);
-  const labelLayerRef = useRef<maptalks.VectorLayer | null>(null);
-  const isClosingHintShownRef = useRef(false);
 
   const defaultSymbol = {
     lineColor: '#f97316', // Orange
@@ -33,8 +31,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     polygonFill: '#f97316',
     polygonOpacity: 0.3,
   };
-
-  const closingSymbol = { ...defaultSymbol, lineColor: '#22c55e' }; // Green
 
   useEffect(() => {
     if (mapContainerRef.current && !mapInstanceRef.current && project.coordinates) {
@@ -51,8 +47,11 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       mapInstanceRef.current = map;
 
       segmentLayerRef.current = new maptalks.VectorLayer('fieldSegments').addTo(map);
-      labelLayerRef.current = new maptalks.VectorLayer('labels').addTo(map);
-      drawToolRef.current = new maptalks.DrawTool({ mode: 'Polygon' }).addTo(map);
+      drawToolRef.current = new maptalks.DrawTool({ 
+        mode: 'Polygon',
+        once: true,
+        symbol: defaultSymbol
+      }).addTo(map);
       
       setupDrawingListeners();
 
@@ -77,38 +76,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     const drawTool = drawToolRef.current;
     if (!drawTool) return;
 
-    drawTool.on('drawstart', () => {
-      labelLayerRef.current?.clear();
-    });
-
-    const handleDrawingProgress = (e: any) => {
-      const geometry = drawTool.getCurrentGeometry();
-      if (!geometry) return;
-
-      const coordinates = geometry.getCoordinates();
-      if (!coordinates || !coordinates[0]) {
-        labelLayerRef.current?.clear();
-        return;
-      }
-      
-      const coords = coordinates[0];
-      if (coords.length < 1) {
-        labelLayerRef.current?.clear();
-        return;
-      }
-
-      if (coords.length >= 2) {
-          updateDistanceLabels(coords);
-      } else {
-          labelLayerRef.current?.clear();
-      }
-      updateClosingHint(e.coordinate, coords[0]);
-      setCurrentArea(formatArea(geometry.getArea()));
-    };
-
-    drawTool.on('drawvertex', handleDrawingProgress);
-    drawTool.on('mousemove', handleDrawingProgress);
-
     drawTool.on('drawend', (e: any) => {
       if (!e.geometry) return;
       const newSegment: FieldSegment = {
@@ -123,74 +90,21 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     });
   };
 
-  const updateDistanceLabels = (coords: maptalks.Coordinate[]) => {
-    if (!mapInstanceRef.current) return;
-    const projection = mapInstanceRef.current.getProjection();
-    if (!projection) return;
-
-    labelLayerRef.current?.clear();
-    // Loop up to the second to last vertex to draw labels only for committed segments
-    for (let i = 0; i < coords.length - 2; i++) {
-      const p1 = coords[i];
-      const p2 = coords[i + 1];
-      const line = new maptalks.LineString([p1, p2]);
-      const distance = line.getLength(projection);
-      const midPoint = new maptalks.Coordinate( (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 );
-      
-      const label = new maptalks.Label(formatDistance(distance), midPoint, {
-        boxStyle: {
-          padding: [6, 4],
-          symbol: {
-            markerType: 'square',
-            markerFill: '#000',
-            markerFillOpacity: 0.8,
-            markerLineWidth: 0,
-          },
-        },
-        textSymbol: {
-          textFill: '#fff',
-          textSize: 12,
-        },
-      });
-      labelLayerRef.current?.addGeometry(label);
-    }
-  };
-
-  const updateClosingHint = (currentCoord: maptalks.Coordinate, firstCoord: maptalks.Coordinate) => {
-    if (!mapInstanceRef.current || !currentCoord || !firstCoord) return;
-    const projection = mapInstanceRef.current.getProjection();
-    if (!projection) return;
-
-    const line = new maptalks.LineString([currentCoord, firstCoord]);
-    const distance = line.getLength(projection);
-    const shouldShowHint = distance < 10; // 10 meters threshold
-
-    if (shouldShowHint && !isClosingHintShownRef.current) {
-      drawToolRef.current?.setSymbol(closingSymbol);
-      isClosingHintShownRef.current = true;
-    } else if (!shouldShowHint && isClosingHintShownRef.current) {
-      drawToolRef.current?.setSymbol(defaultSymbol);
-      isClosingHintShownRef.current = false;
-    }
-  };
-
   const startDrawing = () => {
     setIsDrawing(true);
     mapContainerRef.current?.style.setProperty('cursor', 'crosshair');
-    drawToolRef.current?.setSymbol(defaultSymbol).enable();
+    drawToolRef.current?.enable();
   };
 
   const endDrawing = () => {
     setIsDrawing(false);
     mapContainerRef.current?.style.setProperty('cursor', 'grab');
     drawToolRef.current?.disable();
-    labelLayerRef.current?.clear();
     setCurrentArea('0.0 ft²');
   };
 
   const clearCurrentShape = () => {
     drawToolRef.current?.clear();
-    labelLayerRef.current?.clear();
     setCurrentArea('0.0 ft²');
   };
 
