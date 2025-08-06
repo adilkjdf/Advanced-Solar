@@ -304,7 +304,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       </div>
       <div className="flex-1 relative">
         <div ref={mapContainerRef} className="w-full h-full" />
-        <button onClick={onBack} className.tsx="absolute top-4 left-4 bg-white/90 backdrop-blur-sm text-gray-800 font-semibold px-4 py-2 rounded-lg shadow-lg hover:bg-white flex items-center space-x-2">
+        <button onClick={onBack} className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm text-gray-800 font-semibold px-4 py-2 rounded-lg shadow-lg hover:bg-white flex items-center space-x-2">
           <ArrowLeft className="w-5 h-5" />
           <span>Back to Project</span>
         </button>
