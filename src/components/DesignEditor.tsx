@@ -43,7 +43,9 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   const handleMouseMove = useCallback((e: any) => {
     if (activeTool !== 'draw' || !mapInstanceRef.current) return;
     const coord = e.coordinate;
-    if (!coord) return;
+    if (!coord || typeof coord.x !== 'number' || typeof coord.y !== 'number') {
+      return;
+    }
 
     if (!ghostMarkerRef.current) {
       ghostMarkerRef.current = new maptalks.Marker(coord, {
@@ -75,9 +77,12 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     if (!drawTool) return;
     drawTool.off();
     drawTool.on('drawstart', (e: any) => {
-      if (!e.coordinate) return;
+      const coord = e.coordinate;
+      if (!coord || typeof coord.x !== 'number' || typeof coord.y !== 'number') {
+        return;
+      }
       labelLayerRef.current?.clear();
-      const startMarker = new maptalks.Marker(e.coordinate, {
+      const startMarker = new maptalks.Marker(coord, {
         interactive: true,
         symbol: {
           markerFile: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>'),
