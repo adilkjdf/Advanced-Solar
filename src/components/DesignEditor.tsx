@@ -77,8 +77,9 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     // Check if we're close to the starting point for closure
     const firstVertex = coords[0];
-    const distance = mapInstanceRef.current.distanceTo(coord, firstVertex);
-    const snapThreshold = mapInstanceRef.current.getResolution() * 15;
+    // Calculate distance using maptalks.Coordinate.distanceTo
+    const distance = firstVertex.distanceTo(coord);
+    const snapThreshold = 15 * mapInstanceRef.current.getScale() / 1000; // Convert pixels to map units
 
     if (coords.length > 2 && distance < snapThreshold) {
       coord = firstVertex;
