@@ -104,15 +104,17 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     ghostMarkerRef.current?.setCoordinates(coord);
 
-    // Update mouse distance label
+    // Update mouse distance label - show distance from last vertex to mouse
     if (coords.length > 0) {
       const lastVertex = coords[coords.length - 1];
       const distance = mapInstanceRef.current.distanceTo(lastVertex, coord);
       
       if (mouseDistanceLabelRef.current) {
+        // Update existing label
         mouseDistanceLabelRef.current.setContent(formatDistance(distance));
         mouseDistanceLabelRef.current.setCoordinates(coord);
       } else {
+        // Create new label if it doesn't exist
         mouseDistanceLabelRef.current = new maptalks.Label(formatDistance(distance), coord, {
           'textPlacement': 'point',
           'textDx': 15,
