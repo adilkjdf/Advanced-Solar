@@ -24,6 +24,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
   const drawToolRef = useRef<maptalks.DrawTool | null>(null);
   const segmentLayerRef = useRef<maptalks.VectorLayer | null>(null);
+  const labelLayerRef = useRef<maptalks.VectorLayer | null>(null);
+  const startPointRef = useRef<maptalks.Coordinate | null>(null);
 
   const defaultSymbol = {
     lineColor: '#f97316', // Orange
@@ -31,6 +33,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     polygonFill: '#f97316',
     polygonOpacity: 0.3,
   };
+
+  const closingSymbol = { ...defaultSymbol, lineColor: '#22c55e' }; // Green
 
   useEffect(() => {
     if (mapContainerRef.current && !mapInstanceRef.current && project.coordinates) {
@@ -47,9 +51,9 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       mapInstanceRef.current = map;
 
       segmentLayerRef.current = new maptalks.VectorLayer('fieldSegments').addTo(map);
+      labelLayerRef.current = new maptalks.VectorLayer('labels').addTo(map);
       drawToolRef.current = new maptalks.DrawTool({ 
         mode: 'Polygon',
-        once: true,
         symbol: defaultSymbol
       }).addTo(map);
       
@@ -76,6 +80,41 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     const drawTool = drawToolRef.current;
     if (!drawTool) return;
 
+    drawTool.on('drawstart', (e: any) => {
+      startPointRef.current = e.coordinate;
+      labelLayerRef.current?.clear();
+      const startMarker = new maptalks.Marker(e.coordinate, {
+        symbol: {
+          markerFile: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>'),
+          markerWidth: 20,
+          markerHeight: 20,
+        }
+      });
+      labelLayerRef.current?.addGeometry(startMarker);
+    });
+
+    drawTool.on('mousemove', (e: any) => {
+        if (!startPointRef.current || !mapInstanceRef.current) return;
+        
+        const map = mapInstanceRef.current;
+        const currentCoord = e.coordinate;
+        const startCoord = startPointRef.current;
+
+        const p1 = map.coordToContainerPoint(currentCoord);
+        const p2 = map.coordToContainerPoint(startCoord);
+        const distance = p1.distanceTo(p2);
+
+        const isNearStart = distance < 15; // 15 pixel threshold
+        drawTool.setSymbol(isNearStart ? closingSymbol : defaultSymbol);
+    });
+
+    drawTool.on('drawvertex', (e: any) => {
+        const geom = e.geometry;
+        if (geom) {
+            setCurrentArea(formatArea(geom.getArea()));
+        }
+    });
+
     drawTool.on('drawend', (e: any) => {
       if (!e.geometry) return;
       const newSegment: FieldSegment = {
@@ -98,6 +137,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
   const endDrawing = () => {
     setIsDrawing(false);
+    startPointRef.current = null;
+    labelLayerRef.current?.clear();
     mapContainerRef.current?.style.setProperty('cursor', 'grab');
     drawToolRef.current?.disable();
     setCurrentArea('0.0 ft²');
