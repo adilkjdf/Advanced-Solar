@@ -195,10 +195,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         geom.off('click', handleDeleteClick);
         geom.off('editend');
       });
-      const container = map.getContainer();
-      if (container) {
-        container.style.cursor = 'grab';
-      }
+      map.getContainer().style.cursor = 'grab';
       if (ghostMarkerRef.current) ghostMarkerRef.current.remove();
       if (tempLineRef.current) tempLineRef.current.remove();
       if (tempLabelRef.current) tempLabelRef.current.remove();
