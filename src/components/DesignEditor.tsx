@@ -50,16 +50,32 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       });
       mapInstanceRef.current = map;
 
-      // Initialize layers
       segmentLayerRef.current = new maptalks.VectorLayer('fieldSegments').addTo(map);
       labelLayerRef.current = new maptalks.VectorLayer('labels').addTo(map);
-
-      // Initialize DrawTool
       drawToolRef.current = new maptalks.DrawTool({ mode: 'Polygon' }).addTo(map);
       
       setupDrawingListeners();
 
-      // 3D Layer (kept for future use)
+      const handleMapClick = (e: any) => {
+        const drawTool = drawToolRef.current;
+        if (!drawTool || !drawTool.isEnabled()) return;
+
+        const geom = drawTool.getCurrentGeometry();
+        if (!geom) return;
+
+        const coords = geom.getCoordinates()[0];
+        if (!coords || coords.length < 3) return;
+
+        const firstCoord = coords[0];
+        const clickCoord = e.coordinate;
+        const distance = map.computeDistance(clickCoord, firstCoord);
+
+        if (distance < 10) {
+          drawTool.endDraw(e);
+        }
+      };
+      map.on('click', handleMapClick);
+
       const threeLayer = new ThreeLayer('three', { forceRenderOnMoving: true, forceRenderOnRotating: true });
       threeLayer.prepareToDraw = (gl, scene) => {
         const light = new THREE.DirectionalLight(0xffffff);
@@ -67,14 +83,15 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         scene.add(light);
       };
       map.addLayer(threeLayer);
-    }
 
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
+      return () => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.off('click', handleMapClick);
+          mapInstanceRef.current.remove();
+          mapInstanceRef.current = null;
+        }
+      };
+    }
   }, [project.coordinates]);
 
   const setupDrawingListeners = () => {
@@ -129,7 +146,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
   const updateDistanceLabels = (coords: maptalks.Coordinate[]) => {
     labelLayerRef.current?.clear();
-    for (let i = 0; i < coords.length - 1; i++) {
+    // Loop up to the second to last vertex to draw labels only for committed segments
+    for (let i = 0; i < coords.length - 2; i++) {
       const p1 = coords[i];
       const p2 = coords[i + 1];
       const distance = mapInstanceRef.current?.computeDistance(p1, p2) || 0;
