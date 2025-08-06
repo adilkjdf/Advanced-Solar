@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as maptalks from 'maptalks';
 import { ThreeLayer } from 'maptalks.three';
 import * as THREE from 'three';
 import { ProjectData, Design, FieldSegment } from '../types/project';
-import { ArrowLeft, Check, RotateCcw, RotateCw, Settings, LayoutGrid, Crosshair, GitBranch, PlusCircle, Plus } from 'lucide-react';
-import { formatArea } from '../utils/mapUtils';
+import { ArrowLeft, Check, RotateCcw, RotateCw, Settings, LayoutGrid, Crosshair, GitBranch, PlusCircle, Plus, Trash2 } from 'lucide-react';
+import { formatArea, formatDistance } from '../utils/mapUtils';
 import CreateFieldSegmentPanel from './CreateFieldSegmentPanel';
 
 interface DesignEditorProps {
@@ -35,6 +35,25 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   };
 
   const closingSymbol = { ...defaultSymbol, lineColor: '#22c55e' }; // Green
+
+  const handleMapClick = useCallback((e: any) => {
+    if (!isDrawing || !startPointRef.current || !mapInstanceRef.current) return;
+
+    const map = mapInstanceRef.current;
+    const clickCoord = e.coordinate;
+    const startCoord = startPointRef.current;
+
+    const p1 = map.coordToContainerPoint(clickCoord);
+    const p2 = map.coordToContainerPoint(startCoord);
+    const distance = p1.distanceTo(p2);
+
+    const currentGeom = drawToolRef.current?.getCurrentGeometry();
+    const canClose = currentGeom && currentGeom.getCoordinates()[0].length > 3;
+
+    if (distance < 15 && canClose) {
+        drawToolRef.current?.endDraw();
+    }
+  }, [isDrawing]);
 
   useEffect(() => {
     if (mapContainerRef.current && !mapInstanceRef.current && project.coordinates) {
@@ -69,12 +88,50 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
       return () => {
         if (mapInstanceRef.current) {
+          mapInstanceRef.current.off('click', handleMapClick);
           mapInstanceRef.current.remove();
           mapInstanceRef.current = null;
         }
       };
     }
-  }, [project.coordinates]);
+  }, [project.coordinates, handleMapClick]);
+
+  const updateDistanceLabels = (geometry: maptalks.Polygon) => {
+    if (!geometry || !mapInstanceRef.current || !labelLayerRef.current) return;
+    
+    const tempLabelLayer = labelLayerRef.current;
+    const labels = tempLabelLayer.getGeometries().filter(g => g instanceof maptalks.Label);
+    if (labels.length) {
+        tempLabelLayer.removeGeometry(labels);
+    }
+
+    const coords = geometry.getCoordinates()[0];
+    if (coords.length < 2) return;
+
+    for (let i = 0; i < coords.length - 1; i++) {
+        const p1 = coords[i];
+        const p2 = coords[i + 1];
+        const line = new maptalks.LineString([p1, p2]);
+        const distance = line.getLength();
+        const midPoint = line.getCenter();
+        
+        const label = new maptalks.Label(formatDistance(distance), midPoint, {
+            'boxStyle' : {
+                'padding' : [6, 4],
+                'symbol' : {
+                  'markerType' : 'square',
+                  'markerFill' : 'rgba(0, 0, 0, 0.8)',
+                  'markerLineWidth' : 0
+                }
+            },
+            'textSymbol': {
+                'textFill' : '#ffffff',
+                'textSize' : 12
+            }
+        });
+        tempLabelLayer.addGeometry(label);
+    }
+  };
 
   const setupDrawingListeners = () => {
     const drawTool = drawToolRef.current;
@@ -91,6 +148,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         }
       });
       labelLayerRef.current?.addGeometry(startMarker);
+      mapInstanceRef.current?.on('click', handleMapClick);
     });
 
     drawTool.on('mousemove', (e: any) => {
@@ -104,26 +162,32 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         const p2 = map.coordToContainerPoint(startCoord);
         const distance = p1.distanceTo(p2);
 
-        const isNearStart = distance < 15; // 15 pixel threshold
+        const isNearStart = distance < 15;
         drawTool.setSymbol(isNearStart ? closingSymbol : defaultSymbol);
+        if (e.geometry) {
+            updateDistanceLabels(e.geometry);
+        }
     });
 
     drawTool.on('drawvertex', (e: any) => {
-        const geom = e.geometry;
-        if (geom) {
-            setCurrentArea(formatArea(geom.getArea()));
+        if (e.geometry) {
+            setCurrentArea(formatArea(e.geometry.getArea()));
+            updateDistanceLabels(e.geometry);
         }
     });
 
     drawTool.on('drawend', (e: any) => {
       if (!e.geometry) return;
+      const newSegmentId = new Date().toISOString();
       const newSegment: FieldSegment = {
-        id: new Date().toISOString(),
+        id: newSegmentId,
         geometry: e.geometry.toJSON(),
         area: e.geometry.getArea(),
       };
+      
+      const polygon = e.geometry.copy().setSymbol(defaultSymbol).setId(newSegmentId);
+      segmentLayerRef.current?.addGeometry(polygon);
       setFieldSegments(prev => [...prev, newSegment]);
-      segmentLayerRef.current?.addGeometry(e.geometry.copy().setSymbol(defaultSymbol));
       
       endDrawing();
     });
@@ -136,6 +200,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   };
 
   const endDrawing = () => {
+    mapInstanceRef.current?.off('click', handleMapClick);
     setIsDrawing(false);
     startPointRef.current = null;
     labelLayerRef.current?.clear();
@@ -146,7 +211,19 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
   const clearCurrentShape = () => {
     drawToolRef.current?.clear();
+    labelLayerRef.current?.clear();
     setCurrentArea('0.0 ft²');
+  };
+
+  const handleDeleteSegment = (segmentId: string) => {
+    const segmentLayer = segmentLayerRef.current;
+    if (segmentLayer) {
+        const geometryToRemove = segmentLayer.getGeometryById(segmentId);
+        if (geometryToRemove) {
+            geometryToRemove.remove();
+        }
+    }
+    setFieldSegments(prev => prev.filter(s => s.id !== segmentId));
   };
 
   const sidebarTabs = [
@@ -202,7 +279,12 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
                 ) : (
                   <div className="space-y-2">
                     {fieldSegments.map((seg, index) => (
-                      <div key={seg.id} className="text-sm p-2 bg-gray-50 rounded-md">Field Segment {index + 1}</div>
+                      <div key={seg.id} className="flex items-center justify-between text-sm p-2 bg-gray-50 rounded-md hover:bg-gray-100">
+                        <span>Field Segment {index + 1}</span>
+                        <button onClick={() => handleDeleteSegment(seg.id)} className="p-1 text-gray-500 hover:text-red-600 rounded-full hover:bg-red-100">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}
