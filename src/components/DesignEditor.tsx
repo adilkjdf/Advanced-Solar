@@ -32,6 +32,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   const ghostMarkerRef = useRef<maptalks.Marker | null>(null);
   const tempLineRef = useRef<maptalks.LineString | null>(null);
   const tempLabelRef = useRef<maptalks.Label | null>(null);
+  const drawingIdRef = useRef<string | null>(null);
 
   const defaultSymbol = {
     lineColor: '#f97316',
@@ -40,6 +41,29 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     polygonOpacity: 0.3,
   };
   const closingSymbol = { ...defaultSymbol, lineColor: '#22c55e' };
+
+  const updateDistanceLabels = useCallback((geometry: maptalks.Polygon, segmentId: string) => {
+    if (!geometry || !labelLayerRef.current) return;
+    
+    const oldLabels = labelLayerRef.current.getGeometries().filter(g => g.getProperties()?.segmentId === segmentId);
+    if (oldLabels.length) {
+      labelLayerRef.current.removeGeometry(oldLabels);
+    }
+  
+    const coords = geometry.getCoordinates()[0];
+    if (coords.length < 2) return;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const line = new maptalks.LineString([coords[i], coords[i + 1]]);
+      const label = new maptalks.Label(formatDistance(line.getLength()), line.getCenter(), {
+        'textPlacement' : 'line',
+        'textDy': -15,
+        'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
+        'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
+      });
+      label.setProperties({ isDistanceLabel: true, segmentId: segmentId });
+      labelLayerRef.current.addGeometry(label);
+    }
+  }, []);
 
   const handleMouseMove = useCallback((e: any) => {
     if (activeTool !== 'draw' || !mapInstanceRef.current) return;
@@ -73,7 +97,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         isSnapped = true;
         currentGeom.setSymbol(closingSymbol);
       } else {
-        currentGoeom.setSymbol(defaultSymbol);
+        currentGeom.setSymbol(defaultSymbol);
       }
     }
 
@@ -98,34 +122,12 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     }
   }, [activeTool]);
 
-  const updateDistanceLabels = useCallback((geometry: maptalks.Polygon) => {
-    if (!geometry || !labelLayerRef.current) return;
-    
-    const oldLabels = labelLayerRef.current.getGeometries().filter(g => g.getProperties() && g.getProperties().isDistanceLabel);
-    if (oldLabels.length) {
-      labelLayerRef.current.removeGeometry(oldLabels);
-    }
-  
-    const coords = geometry.getCoordinates()[0];
-    if (coords.length < 2) return;
-    for (let i = 0; i < coords.length - 1; i++) {
-      const line = new maptalks.LineString([coords[i], coords[i + 1]]);
-      const label = new maptalks.Label(formatDistance(line.getLength()), line.getCenter(), {
-        'textPlacement' : 'line',
-        'textDy': -15,
-        'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
-        'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
-      });
-      label.setProperties({ isDistanceLabel: true });
-      labelLayerRef.current.addGeometry(label);
-    }
-  }, []);
-
   const setupDrawingListeners = useCallback(() => {
     const drawTool = drawToolRef.current;
     if (!drawTool) return;
     drawTool.off();
     drawTool.on('drawstart', (e: any) => {
+      drawingIdRef.current = maptalks.Util.UID();
       ghostMarkerRef.current?.remove();
       const startMarker = new maptalks.Marker(e.coordinate, {
         interactive: true,
@@ -134,6 +136,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
           markerWidth: 20, markerHeight: 20,
         }
       });
+      startMarker.setProperties({ isStartMarker: true });
       startMarker.on('mousedown', (evt) => {
         const currentGeom = drawToolRef.current?.getCurrentGeometry();
         if (currentGeom && currentGeom.getCoordinates()[0].length > 2) {
@@ -144,27 +147,40 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       labelLayerRef.current?.addGeometry(startMarker);
     });
     drawTool.on('drawvertex', (e: any) => {
-      if (e.geometry) {
+      if (e.geometry && drawingIdRef.current) {
         if (tempLineRef.current) tempLineRef.current.remove();
         if (tempLabelRef.current) tempLabelRef.current.remove();
         setCurrentArea(formatArea(e.geometry.getArea()));
-        updateDistanceLabels(e.geometry);
+        updateDistanceLabels(e.geometry, drawingIdRef.current);
 
         const vertexMarker = new maptalks.Marker(e.coordinate, {
           symbol: { 'markerType': 'ellipse', 'markerFill': '#ffffff', 'markerWidth': 8, 'markerHeight': 8, 'markerLineWidth': 2, 'markerLineColor': '#f97316' }
-        }).addTo(labelLayerRef.current!);
+        }).setProperties({ isVertex: true });
+        labelLayerRef.current?.addGeometry(vertexMarker);
       }
     });
     drawTool.on('drawend', (e: any) => {
       if (!e.geometry) return;
+      
+      const newSegmentId = maptalks.Util.UID();
       const newSegment: FieldSegment = {
-        id: new Date().toISOString(),
+        id: newSegmentId,
         geometry: e.geometry.toJSON(),
         area: e.geometry.getArea(),
       };
+      
+      if (drawingIdRef.current && labelLayerRef.current) {
+        const tempLabels = labelLayerRef.current.getGeometries().filter(g => g.getProperties()?.segmentId === drawingIdRef.current);
+        labelLayerRef.current.removeGeometry(tempLabels);
+      }
+      
+      updateDistanceLabels(e.geometry, newSegmentId);
+
       const polygon = maptalks.Geometry.fromJSON(newSegment.geometry).setSymbol(defaultSymbol).setId(newSegment.id);
       segmentLayerRef.current?.addGeometry(polygon);
       setFieldSegments(prev => [...prev, newSegment]);
+      
+      drawingIdRef.current = null;
       setActiveTool('none');
     });
   }, [updateDistanceLabels]);
@@ -199,7 +215,13 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
   const clearCurrentShape = () => {
     drawToolRef.current?.clear();
-    labelLayerRef.current?.clear();
+    if (labelLayerRef.current) {
+        const geomsToRemove = labelLayerRef.current.getGeometries().filter(g => {
+            const props = g.getProperties();
+            return !props.isDistanceLabel;
+        });
+        labelLayerRef.current.removeGeometry(geomsToRemove);
+    }
     setCurrentArea('0.0 ft²');
     setupDrawingListeners();
   };
@@ -209,6 +231,10 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     if (segmentLayer) {
       const geometryToRemove = segmentLayer.getGeometryById(segmentId);
       if (geometryToRemove) geometryToRemove.remove();
+    }
+    if (labelLayerRef.current) {
+        const labelsToRemove = labelLayerRef.current.getGeometries().filter(g => g.getProperties()?.segmentId === segmentId);
+        labelLayerRef.current.removeGeometry(labelsToRemove);
     }
     setFieldSegments(prev => prev.filter(s => s.id !== segmentId));
   };
@@ -230,6 +256,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         geom.startEdit();
         geom.on('editend', (e: any) => {
           const editedGeoJSON = e.target.toJSON();
+          updateDistanceLabels(e.target, e.target.getId());
           setFieldSegments(prev => prev.map(seg =>
             seg.id === e.target.getId()
               ? { ...seg, geometry: editedGeoJSON, area: e.target.getArea() }
@@ -263,9 +290,16 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       if (tempLineRef.current) tempLineRef.current.remove();
       if (tempLabelRef.current) tempLabelRef.current.remove();
       ghostMarkerRef.current = tempLineRef.current = tempLabelRef.current = null;
-      labelLayerRef.current?.clear();
+      
+      if (labelLayerRef.current) {
+        const geomsToRemove = labelLayerRef.current.getGeometries().filter(g => {
+            const props = g.getProperties();
+            return !props.isDistanceLabel;
+        });
+        labelLayerRef.current.removeGeometry(geomsToRemove);
+      }
     };
-  }, [activeTool, fieldSegments, handleMouseMove]);
+  }, [activeTool, fieldSegments, handleMouseMove, updateDistanceLabels]);
 
   const sidebarTabs = [
     { id: 'mechanical', label: 'Mechanical', icon: LayoutGrid },
