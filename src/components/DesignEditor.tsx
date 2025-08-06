@@ -37,7 +37,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   const closingSymbol = { ...defaultSymbol, lineColor: '#22c55e' }; // Green
 
   const handleMapClick = useCallback((e: any) => {
-    if (!isDrawing || !startPointRef.current || !mapInstanceRef.current) return;
+    if (!isDrawing || !startPointRef.current || !mapInstanceRef.current || !drawToolRef.current) return;
 
     const map = mapInstanceRef.current;
     const clickCoord = e.coordinate;
@@ -51,7 +51,11 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     const canClose = currentGeom && currentGeom.getCoordinates()[0].length > 3;
 
     if (distance < 15 && canClose) {
+      // Use a timeout to prevent a race condition with the draw tool's internal click handling.
+      // This ensures the endDraw command fires after the library has processed the click event.
+      setTimeout(() => {
         drawToolRef.current?.endDraw();
+      }, 0);
     }
   }, [isDrawing]);
 
