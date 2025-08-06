@@ -132,12 +132,12 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         }
       });
 
-      startMarker.on('click', (evt) => {
+      startMarker.on('mousedown', (evt) => {
         if (drawToolRef.current) {
           const currentGeom = drawToolRef.current.getCurrentGeometry();
           const canClose = currentGeom && currentGeom.getCoordinates()[0].length > 2;
           if (canClose) {
-            evt.stopPropagation();
+            evt.domEvent.stopPropagation();
             drawToolRef.current.endDraw();
           }
         }
