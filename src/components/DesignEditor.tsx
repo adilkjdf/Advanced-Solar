@@ -36,6 +36,14 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
   const closingSymbol = { ...defaultSymbol, lineColor: '#22c55e' }; // Green
 
+  const vertexSymbol = {
+    'markerType': 'ellipse',
+    'markerFill': '#22c55e', // green
+    'markerWidth': 8,
+    'markerHeight': 8,
+    'markerLineWidth': 0
+  };
+
   useEffect(() => {
     if (mapContainerRef.current && !mapInstanceRef.current && project.coordinates) {
       const map = new maptalks.Map(mapContainerRef.current, {
@@ -125,11 +133,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       
       const startMarker = new maptalks.Marker(e.coordinate, {
         interactive: true,
-        symbol: {
-          markerFile: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>'),
-          markerWidth: 20,
-          markerHeight: 20,
-        }
+        symbol: vertexSymbol
       });
 
       startMarker.on('mousedown', (evt) => {
@@ -164,8 +168,18 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     drawTool.on('drawvertex', (e: any) => {
         if (e.geometry) {
+            const coords = e.geometry.getCoordinates()[0];
             setCurrentArea(formatArea(e.geometry.getArea()));
             updateDistanceLabels(e.geometry);
+
+            // Add non-interactive markers for all vertices *after* the first one.
+            if (coords.length > 1) {
+                const vertexMarker = new maptalks.Marker(e.coordinate, {
+                    interactive: false, // These are just visual aids
+                    symbol: vertexSymbol
+                });
+                labelLayerRef.current?.addGeometry(vertexMarker);
+            }
         }
     });
 
@@ -290,7 +304,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       </div>
       <div className="flex-1 relative">
         <div ref={mapContainerRef} className="w-full h-full" />
-        <button onClick={onBack} className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm text-gray-800 font-semibold px-4 py-2 rounded-lg shadow-lg hover:bg-white flex items-center space-x-2">
+        <button onClick={onBack} className.tsx="absolute top-4 left-4 bg-white/90 backdrop-blur-sm text-gray-800 font-semibold px-4 py-2 rounded-lg shadow-lg hover:bg-white flex items-center space-x-2">
           <ArrowLeft className="w-5 h-5" />
           <span>Back to Project</span>
         </button>
