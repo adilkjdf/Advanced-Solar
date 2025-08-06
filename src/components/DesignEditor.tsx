@@ -25,6 +25,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   const drawToolRef = useRef<maptalks.DrawTool | null>(null);
   const segmentLayerRef = useRef<maptalks.VectorLayer | null>(null);
   const labelLayerRef = useRef<maptalks.VectorLayer | null>(null);
+  const startPointRef = useRef<maptalks.Coordinate | null>(null);
 
   const defaultSymbol = {
     lineColor: '#f97316', // Orange
@@ -75,10 +76,15 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     }
   }, [project.coordinates]);
 
-  const renderSegmentLabels = (geometry: maptalks.Polygon) => {
+  const updateDistanceLabels = (geometry: maptalks.Polygon) => {
     if (!geometry || !mapInstanceRef.current || !labelLayerRef.current) return;
     
-    const labelLayer = labelLayerRef.current;
+    const tempLabelLayer = labelLayerRef.current;
+    const labels = tempLabelLayer.getGeometries().filter(g => g instanceof maptalks.Label);
+    if (labels.length) {
+        tempLabelLayer.removeGeometry(labels);
+    }
+
     const coords = geometry.getCoordinates()[0];
     if (coords.length < 2) return;
 
@@ -103,7 +109,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
                 'textSize' : 12
             }
         });
-        labelLayer.addGeometry(label);
+        tempLabelLayer.addGeometry(label);
     }
   };
 
@@ -111,9 +117,10 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     const drawTool = drawToolRef.current;
     if (!drawTool) return;
 
-    drawTool.off(); // Clear previous listeners
+    drawTool.off(); // Clear previous listeners to prevent duplicates
 
     drawTool.on('drawstart', (e: any) => {
+      startPointRef.current = e.coordinate;
       labelLayerRef.current?.clear();
       
       const startMarker = new maptalks.Marker(e.coordinate, {
@@ -130,7 +137,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
           const currentGeom = drawToolRef.current.getCurrentGeometry();
           const canClose = currentGeom && currentGeom.getCoordinates()[0].length > 2;
           if (canClose) {
-            evt.domEvent.stopPropagation();
+            evt.stopPropagation();
             drawToolRef.current.endDraw();
           }
         }
@@ -158,6 +165,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     drawTool.on('drawvertex', (e: any) => {
         if (e.geometry) {
             setCurrentArea(formatArea(e.geometry.getArea()));
+            updateDistanceLabels(e.geometry);
         }
     });
 
@@ -172,9 +180,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       
       const polygon = e.geometry.copy().setSymbol(defaultSymbol).setId(newSegmentId);
       segmentLayerRef.current?.addGeometry(polygon);
-      
-      renderSegmentLabels(e.geometry);
-      
       setFieldSegments(prev => [...prev, newSegment]);
       
       endDrawing();
@@ -189,6 +194,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
   const endDrawing = () => {
     setIsDrawing(false);
+    startPointRef.current = null;
+    labelLayerRef.current?.clear();
     mapContainerRef.current?.style.setProperty('cursor', 'grab');
     drawToolRef.current?.disable();
     setCurrentArea('0.0 ft²');
@@ -209,8 +216,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         }
     }
     setFieldSegments(prev => prev.filter(s => s.id !== segmentId));
-    // Note: This does not remove the labels associated with the segment.
-    // A more robust implementation would track and remove them.
   };
 
   const sidebarTabs = [
