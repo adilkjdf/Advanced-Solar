@@ -70,6 +70,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   
     // Draw vertex markers
     coords.forEach(coord => {
+      if (!coord || isNaN(coord.x) || isNaN(coord.y)) return;
       const vertexMarker = new maptalks.Marker(coord, {
         symbol: { 'markerType': 'ellipse', 'markerFill': '#ffffff', 'markerWidth': 8, 'markerHeight': 8, 'markerLineWidth': 2, 'markerLineColor': '#f97316' }
       }).setProperties({ isVertex: true, segmentId: segmentId });
@@ -85,10 +86,13 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       const p1 = coords[i];
       const p2 = isPolygon ? coords[(i + 1) % coords.length] : coords[i + 1];
   
-      if (!p1 || !p2 || (p1.x === p2.x && p1.y === p2.y)) continue;
+      if (!p1 || isNaN(p1.x) || isNaN(p1.y) || !p2 || isNaN(p2.x) || isNaN(p2.y) || (p1.x === p2.x && p1.y === p2.y)) continue;
   
       const line = new maptalks.LineString([p1, p2]);
-      const label = new maptalks.Label(formatDistance(line.getLength()), line.getCenter(), {
+      const center = line.getCenter();
+      if (!center || isNaN(center.x) || isNaN(center.y)) continue;
+
+      const label = new maptalks.Label(formatDistance(line.getLength()), center, {
         'textPlacement': 'line',
         'textDy': -15,
         'boxStyle': { 'padding': [6, 4], 'symbol': { 'markerType': 'square', 'markerFill': 'rgba(0, 0, 0, 0.8)', 'markerLineWidth': 0 } },
@@ -105,7 +109,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     const map = mapInstanceRef.current;
     const drawTool = drawToolRef.current;
     let coord = e.coordinate;
-    if (!coord || typeof coord.x !== 'number' || typeof coord.y !== 'number') {
+    
+    if (!coord || typeof coord.x !== 'number' || isNaN(coord.x) || typeof coord.y !== 'number' || isNaN(coord.y)) {
       return;
     }
 
@@ -129,6 +134,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     
     if (coords.length > 1) {
       const firstVertex = coords[0];
+      if (!firstVertex || isNaN(firstVertex.x) || isNaN(firstVertex.y)) return;
+
       const distance = coord.distanceTo(new maptalks.Coordinate(firstVertex));
       const snapThreshold = map.getResolution() * 15;
 
@@ -152,7 +159,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     if (tempLabelRef.current) tempLabelRef.current.remove();
     
     const lastVertex = coords[coords.length - 1];
-    if (lastVertex) {
+    if (lastVertex && typeof lastVertex.x === 'number' && !isNaN(lastVertex.x) && typeof lastVertex.y === 'number' && !isNaN(lastVertex.y)) {
         if (lastVertex.x === coord.x && lastVertex.y === coord.y) return;
 
         const tempLine = new maptalks.LineString([lastVertex, coord], {
@@ -165,10 +172,12 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         tempLine.addTo(labelLayerRef.current!);
         tempLineRef.current = tempLine;
 
-        // Only show measurement for the active drawing line, not the closing line
         if (!isSnapped) {
             const distance = tempLine.getLength();
-            const tempLabel = new maptalks.Label(formatDistance(distance), tempLine.getCenter(), {
+            const center = tempLine.getCenter();
+            if (!center || isNaN(center.x) || isNaN(center.y)) return;
+
+            const tempLabel = new maptalks.Label(formatDistance(distance), center, {
                 'textPlacement' : 'line',
                 'textDy': -15,
                 'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
