@@ -108,20 +108,20 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         coord = firstVertex;
         isSnapped = true;
         currentGeom.setSymbol(closingSymbol);
+        ghostMarkerRef.current?.hide();
       } else {
         currentGeom.setSymbol(defaultSymbol);
+        ghostMarkerRef.current?.show();
       }
     }
 
-    ghostMarkerRef.current?.setCoordinates(coord);
+    if (!isSnapped) {
+      ghostMarkerRef.current?.setCoordinates(coord);
+    }
 
     // Clean up previous temporary label
     if (tempLabelRef.current) tempLabelRef.current.remove();
     tempLabelRef.current = null;
-
-    // The temporary label logic that was here has been removed to prevent showing
-    // a measurement for the line segment that is currently being drawn.
-    // Measurements will only appear for committed segments after a click.
 
   }, [activeTool]);
 
@@ -156,6 +156,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       }
     });
     drawTool.on('drawend', (e: any) => {
+      ghostMarkerRef.current?.show();
       if (!e.geometry) return;
       
       const newSegmentId = maptalks.Util.UID();
@@ -226,6 +227,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     tempLabelRef.current = null;
     
     setCurrentArea('0.0 ft²');
+    ghostMarkerRef.current?.show();
   };
 
   const handleDeleteSegment = (segmentId: string) => {
@@ -288,10 +290,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         geom.off('editend');
       });
 
-      if (ghostMarkerRef.current) ghostMarkerRef.current.remove();
-      if (tempLabelRef.current) tempLabelRef.current.remove();
-      ghostMarkerRef.current = tempLabelRef.current = null;
-      
       clearCurrentShape();
     };
   }, [activeTool, fieldSegments, handleMouseMove, updateDistanceLabels]);
