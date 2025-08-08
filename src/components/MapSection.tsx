@@ -1,6 +1,33 @@
-import React, { useEffect, useRef, useState } from 'react';
-import * as maptalks from 'maptalks';
+import React, { useEffect, useState, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
+import { LatLngExpression, Map as LeafletMap } from 'leaflet';
 import { MapPin, Map, Satellite } from 'lucide-react';
+
+interface MapUpdaterProps {
+  center: LatLngExpression;
+  zoom: number;
+}
+
+const MapUpdater: React.FC<MapUpdaterProps> = ({ center, zoom }) => {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, zoom);
+  }, [center, zoom, map]);
+  return null;
+};
+
+interface LocationSelectorProps {
+  onLocationSelect: (lat: number, lng: number) => void;
+}
+
+const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationSelect }) => {
+  useMapEvents({
+    click(e) {
+      onLocationSelect(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+};
 
 interface MapSectionProps {
   address: string;
@@ -15,103 +42,16 @@ const MapSection: React.FC<MapSectionProps> = ({
   onLocationSelect,
   onAddressGeocode,
 }) => {
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<maptalks.Map | null>(null);
-  const markerRef = useRef<maptalks.Marker | null>(null);
   const [mapType, setMapType] = useState<'satellite' | 'standard'>('satellite');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Default center (San Francisco Bay Area)
-  const defaultCenter: [number, number] = [37.7749, -122.4194];
-  
-  // Initialize map
-  useEffect(() => {
-    if (mapContainerRef.current && !mapInstanceRef.current) {
-      const mapCenter: [number, number] = coordinates
-        ? [coordinates.lng, coordinates.lat]
-        : [defaultCenter[1], defaultCenter[0]];
+  const defaultCenter: LatLngExpression = [37.7749, -122.4194];
+  const mapCenter: LatLngExpression = coordinates ? [coordinates.lat, coordinates.lng] : defaultCenter;
+  const zoom = coordinates ? 18 : 10;
 
-      const map = new maptalks.Map(mapContainerRef.current, {
-        center: mapCenter,
-        zoom: coordinates ? 18 : 10,
-        baseLayer: new maptalks.TileLayer('base', {
-          urlTemplate: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
-          attribution: '&copy; <a href="https://www.google.com/maps">Google Maps</a>',
-        }),
-      });
-
-      map.on('click', (e: any) => {
-        onLocationSelect(e.coordinate.y, e.coordinate.x);
-      });
-
-      mapInstanceRef.current = map;
-    }
-
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
-  }, []); // Run only once
-
-  // Update map center when coordinates change
-  useEffect(() => {
-    if (mapInstanceRef.current && coordinates) {
-      mapInstanceRef.current.animateTo(
-        {
-          center: [coordinates.lng, coordinates.lat],
-          zoom: 18,
-        },
-        {
-          duration: 1000,
-        }
-      );
-    }
-  }, [coordinates]);
-
-  // Update marker
-  useEffect(() => {
-    if (!mapInstanceRef.current) return;
-    const { VectorLayer, Marker } = maptalks;
-    let layer = mapInstanceRef.current.getLayer('markerLayer') as maptalks.VectorLayer;
-
-    if (coordinates) {
-      if (!layer) {
-        layer = new VectorLayer('markerLayer').addTo(mapInstanceRef.current);
-      }
-      
-      if (markerRef.current) {
-        markerRef.current.setCoordinates([coordinates.lng, coordinates.lat]);
-      } else {
-        markerRef.current = new Marker([coordinates.lng, coordinates.lat]);
-        layer.addGeometry(markerRef.current);
-      }
-    } else {
-      if (layer) {
-        layer.clear();
-      }
-      if (markerRef.current) {
-        markerRef.current = null;
-      }
-    }
-  }, [coordinates]);
-
-  // Handle map type change
-  useEffect(() => {
-    if (mapInstanceRef.current) {
-      const urlTemplate =
-        mapType === 'satellite'
-          ? 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'
-          : 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
-
-      const newBaseLayer = new maptalks.TileLayer('base', {
-        urlTemplate,
-        attribution: '&copy; <a href="https://www.google.com/maps">Google Maps</a>',
-      });
-      mapInstanceRef.current.setBaseLayer(newBaseLayer);
-    }
-  }, [mapType]);
+  const satelliteUrl = 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
+  const standardUrl = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
+  const attribution = '&copy; <a href="https://www.google.com/maps">Google Maps</a>';
 
   const handleCenterOnAddress = async () => {
     if (!address.trim()) return;
@@ -179,11 +119,19 @@ const MapSection: React.FC<MapSectionProps> = ({
 
       <div className="relative">
         <div className="h-80 sm:h-96">
-          <div ref={mapContainerRef} className="h-full w-full rounded-b-lg" />
+          <MapContainer center={mapCenter} zoom={zoom} scrollWheelZoom={true} className="h-full w-full rounded-b-lg">
+            <TileLayer
+              attribution={attribution}
+              url={mapType === 'satellite' ? satelliteUrl : standardUrl}
+            />
+            {coordinates && <Marker position={[coordinates.lat, coordinates.lng]} />}
+            <MapUpdater center={mapCenter} zoom={zoom} />
+            <LocationSelector onLocationSelect={onLocationSelect} />
+          </MapContainer>
         </div>
 
         {coordinates && (
-          <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-sm text-xs">
+          <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-sm text-xs z-[1000]">
             <div className="font-medium text-gray-800">Selected Location:</div>
             <div className="text-gray-600">
               {coordinates.lat.toFixed(4)}, {coordinates.lng.toFixed(4)}
