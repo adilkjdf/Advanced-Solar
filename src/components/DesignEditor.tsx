@@ -107,6 +107,17 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     
     if (!mouseCoord || typeof mouseCoord.x !== 'number' || isNaN(mouseCoord.x) || typeof mouseCoord.y !== 'number' || isNaN(mouseCoord.y)) return;
 
+    // Ghost marker logic
+    if (!ghostMarkerRef.current && labelLayerRef.current) {
+        ghostMarkerRef.current = new maptalks.Marker(mouseCoord, {
+          symbol: defaultGhostSymbol
+        }).addTo(labelLayerRef.current);
+    }
+    if (ghostMarkerRef.current) {
+        ghostMarkerRef.current.setCoordinates(mouseCoord).show();
+    }
+
+    // Clean up previous temp line/label
     if (tempLineRef.current) tempLineRef.current.remove();
     if (tempLabelRef.current) tempLabelRef.current.remove();
 
@@ -119,6 +130,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     const lastVertex = coords[coords.length - 1];
     let isSnapped = false;
 
+    // Snapping logic
     if (coords.length > 1) {
       const firstVertex = coords[0];
       const distance = mouseCoord.distanceTo(new maptalks.Coordinate(firstVertex));
@@ -128,13 +140,20 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         mouseCoord = new maptalks.Coordinate(firstVertex);
         isSnapped = true;
         drawTool.setSymbol(closingSymbol);
+        if (ghostMarkerRef.current) ghostMarkerRef.current.setSymbol(snapGhostSymbol);
       } else {
         drawTool.setSymbol(defaultSymbol);
+        if (ghostMarkerRef.current) ghostMarkerRef.current.setSymbol(defaultGhostSymbol);
       }
+    } else {
+        if (ghostMarkerRef.current) ghostMarkerRef.current.setSymbol(defaultGhostSymbol);
     }
 
+    // Don't draw the temp line if we are snapped to the closing point
+    if (isSnapped) return;
+
     const tempLine = new maptalks.LineString([lastVertex, mouseCoord], {
-        symbol: { lineColor: isSnapped ? '#22c55e' : '#f97316', lineWidth: 2, lineDasharray: [5, 5] }
+        symbol: { lineColor: '#f97316', lineWidth: 2, lineDasharray: [5, 5] }
     });
     tempLine.addTo(labelLayerRef.current!);
     tempLineRef.current = tempLine;
@@ -191,6 +210,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       if (tempLabelRef.current) tempLabelRef.current.remove();
       tempLineRef.current = null;
       tempLabelRef.current = null;
+      if (ghostMarkerRef.current) ghostMarkerRef.current.hide();
       drawTool.setSymbol(defaultSymbol);
       
       if (drawingIdRef.current && labelLayerRef.current) {
@@ -272,6 +292,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     if (tempLabelRef.current) tempLabelRef.current.remove();
     tempLineRef.current = null;
     tempLabelRef.current = null;
+    if (ghostMarkerRef.current) ghostMarkerRef.current.hide();
     
     setCurrentArea('0.0 ft²');
   };
@@ -336,6 +357,11 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         geom.off('click', handleDeleteClick);
         geom.off('editend');
       });
+
+      if (ghostMarkerRef.current) {
+        ghostMarkerRef.current.remove();
+        ghostMarkerRef.current = null;
+      }
 
       clearCurrentShape();
     };
