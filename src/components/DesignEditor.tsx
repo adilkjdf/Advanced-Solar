@@ -49,16 +49,13 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   const updateDistanceLabels = useCallback((geometry: maptalks.Geometry, segmentId: string) => {
     if (!geometry || !labelLayerRef.current) return;
   
-    // Clear previous labels and vertices for this segment
-    const oldGeometries = labelLayerRef.current.getGeometries().filter(g => g.getProperties()?.segmentId === segmentId);
-    if (oldGeometries.length) {
-      labelLayerRef.current.removeGeometry(oldGeometries);
+    const oldLabels = labelLayerRef.current.getGeometries().filter(g => g.getProperties()?.segmentId === segmentId);
+    if (oldLabels.length) {
+      labelLayerRef.current.removeGeometry(oldLabels);
     }
   
-    let coords: maptalks.Coordinate[];
-    const isPolygon = geometry instanceof maptalks.Polygon;
-  
-    if (isPolygon) {
+    let coords;
+    if (geometry instanceof maptalks.Polygon) {
       coords = geometry.getShell();
     } else if (geometry instanceof maptalks.LineString) {
       coords = geometry.getCoordinates();
@@ -66,11 +63,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       return;
     }
   
-    if (!coords || coords.length === 0) return;
-  
-    // Draw vertex markers
     coords.forEach(coord => {
-      if (!coord || isNaN(coord.x) || isNaN(coord.y)) return;
       const vertexMarker = new maptalks.Marker(coord, {
         symbol: { 'markerType': 'ellipse', 'markerFill': '#ffffff', 'markerWidth': 8, 'markerHeight': 8, 'markerLineWidth': 2, 'markerLineColor': '#f97316' }
       }).setProperties({ isVertex: true, segmentId: segmentId });
@@ -79,20 +72,13 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   
     if (coords.length < 2) return;
   
-    // For a polygon, we draw N labels for N sides. For a line, N-1 labels for N vertices.
-    const limit = isPolygon ? coords.length : coords.length - 1;
-  
-    for (let i = 0; i < limit; i++) {
+    for (let i = 0; i < coords.length - 1; i++) {
       const p1 = coords[i];
-      const p2 = isPolygon ? coords[(i + 1) % coords.length] : coords[i + 1];
-  
-      if (!p1 || isNaN(p1.x) || isNaN(p1.y) || !p2 || isNaN(p2.x) || isNaN(p2.y) || (p1.x === p2.x && p1.y === p2.y)) continue;
+      const p2 = coords[i + 1];
+      if (!p2 || (p1.x === p2.x && p1.y === p2.y)) continue;
   
       const line = new maptalks.LineString([p1, p2]);
-      const center = line.getCenter();
-      if (!center || isNaN(center.x) || isNaN(center.y)) continue;
-
-      const label = new maptalks.Label(formatDistance(line.getLength()), center, {
+      const label = new maptalks.Label(formatDistance(line.getLength()), line.getCenter(), {
         'textPlacement': 'line',
         'textDy': -15,
         'boxStyle': { 'padding': [6, 4], 'symbol': { 'markerType': 'square', 'markerFill': 'rgba(0, 0, 0, 0.8)', 'markerLineWidth': 0 } },
@@ -109,8 +95,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     const map = mapInstanceRef.current;
     const drawTool = drawToolRef.current;
     let coord = e.coordinate;
-    
-    if (!coord || typeof coord.x !== 'number' || isNaN(coord.x) || typeof coord.y !== 'number' || isNaN(coord.y)) {
+    if (!coord || typeof coord.x !== 'number' || typeof coord.y !== 'number') {
       return;
     }
 
@@ -132,10 +117,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     const coords = currentGeom.getCoordinates();
     let isSnapped = false;
     
-    if (coords.length > 1) {
+    if (coords.length > 1) { // Need at least 2 points to snap
       const firstVertex = coords[0];
-      if (!firstVertex || isNaN(firstVertex.x) || isNaN(firstVertex.y)) return;
-
       const distance = coord.distanceTo(new maptalks.Coordinate(firstVertex));
       const snapThreshold = map.getResolution() * 15;
 
@@ -159,9 +142,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     if (tempLabelRef.current) tempLabelRef.current.remove();
     
     const lastVertex = coords[coords.length - 1];
-    if (lastVertex && typeof lastVertex.x === 'number' && !isNaN(lastVertex.x) && typeof lastVertex.y === 'number' && !isNaN(lastVertex.y)) {
-        if (lastVertex.x === coord.x && lastVertex.y === coord.y) return;
-
+    if (lastVertex) {
         const tempLine = new maptalks.LineString([lastVertex, coord], {
             symbol: {
                 lineColor: isSnapped ? '#22c55e' : '#f97316',
@@ -172,20 +153,15 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         tempLine.addTo(labelLayerRef.current!);
         tempLineRef.current = tempLine;
 
-        if (!isSnapped) {
-            const distance = tempLine.getLength();
-            const center = tempLine.getCenter();
-            if (!center || isNaN(center.x) || isNaN(center.y)) return;
-
-            const tempLabel = new maptalks.Label(formatDistance(distance), center, {
-                'textPlacement' : 'line',
-                'textDy': -15,
-                'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
-                'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
-            });
-            tempLabel.addTo(labelLayerRef.current!);
-            tempLabelRef.current = tempLabel;
-        }
+        const distance = tempLine.getLength();
+        const tempLabel = new maptalks.Label(formatDistance(distance), tempLine.getCenter(), {
+            'textPlacement' : 'line',
+            'textDy': -15,
+            'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
+            'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
+        });
+        tempLabel.addTo(labelLayerRef.current!);
+        tempLabelRef.current = tempLabel;
     }
   }, [activeTool]);
 
@@ -344,6 +320,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     if (activeTool === 'draw') {
       map.getContainer().style.cursor = 'crosshair';
+      // Use drawstart to ensure we get the first coordinate.
+      drawTool.on('drawstart', handleMouseMove);
       map.on('mousemove', handleMouseMove);
       drawTool.setMode('Polygon').enable();
     } else if (activeTool === 'edit') {
@@ -369,6 +347,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     return () => {
       drawTool.disable();
       drawTool.setSymbol(defaultSymbol);
+      drawTool.off('drawstart', handleMouseMove);
       map.off('mousemove', handleMouseMove);
       
       const container = map.getContainer();
