@@ -123,7 +123,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     let isSnapped = false;
     
-    if (coords.length > 3) {
+    if (coords.length > 4) {
       const firstVertex = coords[0];
       const distance = coord.distanceTo(new maptalks.Coordinate(firstVertex));
       const snapThreshold = map.getResolution() * 15;
