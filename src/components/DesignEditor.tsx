@@ -46,6 +46,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   const drawingIdRef = useRef<string | null>(null);
   const startMarkerRef = useRef<maptalks.Marker | null>(null);
   const snapTooltipRef = useRef<maptalks.Label | null>(null);
+  const isSnappedRef = useRef(false);
 
   const updateDistanceLabels = useCallback((geometry: maptalks.Geometry, segmentId: string) => {
     if (!geometry || !labelLayerRef.current) return;
@@ -156,6 +157,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       ghostMarker.setCoordinates(coord);
       ghostMarker.setSymbol(defaultGhostSymbol);
     }
+    isSnappedRef.current = isSnapped;
 
     if (tempLineRef.current) tempLineRef.current.remove();
     if (tempLabelRef.current) tempLabelRef.current.remove();
@@ -192,20 +194,13 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       drawingIdRef.current = maptalks.Util.UID();
       
       startMarkerRef.current = new maptalks.Marker(e.coordinate, {
-        interactive: true,
+        interactive: false,
         symbol: {
           markerFile: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>'),
           markerWidth: 20, markerHeight: 20,
         }
       });
       startMarkerRef.current.setProperties({ isStartMarker: true });
-      startMarkerRef.current.on('mousedown', (evt) => {
-        const currentGeom = drawToolRef.current?.getCurrentGeometry();
-        if (currentGeom && currentGeom.getCoordinates()[0].length > 2) {
-          evt.domEvent.stopPropagation();
-          drawToolRef.current!.endDraw();
-        }
-      });
       labelLayerRef.current?.addGeometry(startMarkerRef.current);
     });
     drawTool.on('drawvertex', (e: any) => {
@@ -361,11 +356,17 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     const handleDeleteClick = (e: any) => handleDeleteSegment(e.target.getId());
 
+    const handleMapClick = () => {
+      if (isSnappedRef.current) {
+        drawTool.endDraw();
+      }
+    };
+
     if (activeTool === 'draw') {
       map.getContainer().style.cursor = 'crosshair';
-      // Use drawstart to ensure we get the first coordinate.
       drawTool.on('drawstart', handleMouseMove);
       map.on('mousemove', handleMouseMove);
+      map.on('click', handleMapClick);
       drawTool.setMode('Polygon').enable();
     } else if (activeTool === 'edit') {
       segmentLayer.getGeometries().forEach((geom: any) => {
@@ -392,6 +393,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       drawTool.setSymbol(defaultSymbol);
       drawTool.off('drawstart', handleMouseMove);
       map.off('mousemove', handleMouseMove);
+      map.off('click', handleMapClick);
       
       const container = map.getContainer();
       if (container) {
@@ -436,7 +438,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
                 <div className="flex items-center space-x-1 text-green-600"><Check className="w-4 h-4" /><span>Saved</span></div>
                 <div className="flex items-center space-x-2">
                   <button className="p-1 text-gray-500 hover:text-gray-800"><RotateCcw className="w-4 h-4" /></button>
-                  <button className="p-1 text-gray-800 hover:text-gray-800"><RotateCw className="w-4 h-4" /></button>
+                  <button className="p-1 text-gray-500 hover:text-gray-800"><RotateCw className="w-4 h-4" /></button>
                 </div>
               </div>
             </div>
