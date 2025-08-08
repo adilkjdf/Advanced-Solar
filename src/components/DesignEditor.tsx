@@ -46,7 +46,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   const drawingIdRef = useRef<string | null>(null);
   const startMarkerRef = useRef<maptalks.Marker | null>(null);
 
-  const updateDistanceLabels = useCallback((geometry: maptalks.Geometry, segmentId: string) => {
+  const updateDistanceLabels = useCallback((geometry: maptalks.Geometry, segmentId: string, isDrawing: boolean) => {
     if (!geometry || !labelLayerRef.current) return;
     
     const oldLabels = labelLayerRef.current.getGeometries().filter(g => g.getProperties()?.segmentId === segmentId && (g.getProperties().isDistanceLabel || g.getProperties().isVertex));
@@ -72,10 +72,11 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     if (coords.length < 2) return;
     
-    for (let i = 0; i < coords.length - 1; i++) {
+    const segmentsToDraw = isDrawing ? coords.length - 2 : coords.length - 1;
+
+    for (let i = 0; i < segmentsToDraw; i++) {
       const p1 = coords[i];
       const p2 = coords[i+1];
-      // Don't draw label for the closing segment if it's a point and not a line
       if (p1.x === p2.x && p1.y === p2.y) continue;
 
       const line = new maptalks.LineString([p1, p2]);
@@ -198,7 +199,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         tempLabelRef.current = null;
 
         setCurrentArea(formatArea(e.geometry.getArea()));
-        updateDistanceLabels(e.geometry, drawingIdRef.current);
+        updateDistanceLabels(e.geometry, drawingIdRef.current, true);
       }
     });
     drawTool.on('drawend', (e: any) => {
@@ -227,7 +228,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         startMarkerRef.current = null;
       }
       
-      updateDistanceLabels(e.geometry, newSegmentId);
+      updateDistanceLabels(e.geometry, newSegmentId, false);
 
       const polygon = maptalks.Geometry.fromJSON(newSegment.geometry).setSymbol(defaultSymbol).setId(newSegment.id);
       segmentLayerRef.current?.addGeometry(polygon);
@@ -272,12 +273,19 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         drawTool.endDraw();
         drawTool.setSymbol(defaultSymbol);
     }
-    if (labelLayerRef.current) {
+    
+    const activeDrawingId = drawingIdRef.current;
+    if (labelLayerRef.current && activeDrawingId) {
         const geomsToRemove = labelLayerRef.current.getGeometries().filter(g => {
             const props = g.getProperties();
-            return props.isVertex || props.isDistanceLabel || props.isStartMarker;
+            return props.segmentId === activeDrawingId;
         });
         labelLayerRef.current.removeGeometry(geomsToRemove);
+    }
+
+    if (startMarkerRef.current) {
+        startMarkerRef.current.remove();
+        startMarkerRef.current = null;
     }
     if (tempLineRef.current) tempLineRef.current.remove();
     if (tempLabelRef.current) tempLabelRef.current.remove();
@@ -318,7 +326,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         geom.startEdit();
         geom.on('editend', (e: any) => {
           const editedGeoJSON = e.target.toJSON();
-          updateDistanceLabels(e.target, e.target.getId());
+          updateDistanceLabels(e.target, e.target.getId(), false);
           setFieldSegments(prev => prev.map(seg =>
             seg.id === e.target.getId()
               ? { ...seg, geometry: editedGeoJSON, area: e.target.getArea() }
