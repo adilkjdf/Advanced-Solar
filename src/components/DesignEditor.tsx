@@ -113,13 +113,13 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       const snapThreshold = map.getResolution() * 15;
 
       if (distance < snapThreshold) {
-        // Snapped state
-        drawTool.setSymbol(closingSymbol);
+        // Snapped state: directly update the geometry's symbol
+        currentGeom.setSymbol(closingSymbol);
         ghostMarker.setCoordinates(firstVertex);
         ghostMarker.setSymbol(snapGhostSymbol);
       } else {
-        // Not snapped state
-        drawTool.setSymbol(defaultSymbol);
+        // Not snapped state: directly update the geometry's symbol
+        currentGeom.setSymbol(defaultSymbol);
         ghostMarker.setCoordinates(coord);
         ghostMarker.setSymbol(defaultGhostSymbol);
       }
@@ -162,7 +162,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     });
     drawTool.on('drawend', (e: any) => {
       ghostMarkerRef.current?.hide();
-      drawTool.setSymbol(defaultSymbol);
       if (!e.geometry) return;
       
       const newSegmentId = maptalks.Util.UID();
@@ -224,7 +223,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     const drawTool = drawToolRef.current;
     if (drawTool) {
         drawTool.endDraw();
-        drawTool.setSymbol(defaultSymbol);
     }
     if (labelLayerRef.current) {
         const geomsToRemove = labelLayerRef.current.getGeometries().filter(g => {
@@ -287,7 +285,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     return () => {
       drawTool.disable();
-      drawTool.setSymbol(defaultSymbol);
       map.off('mousemove', handleMouseMove);
       
       const container = map.getContainer();
