@@ -114,10 +114,14 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         return;
     };
 
-    const coords = currentGeom.getCoordinates();
+    let coords = currentGeom.getCoordinates();
+    if (currentGeom instanceof maptalks.Polygon) {
+        coords = coords[0] || [];
+    }
+
     let isSnapped = false;
     
-    if (coords.length > 1) { // Need at least 2 points to snap
+    if (coords.length > 1) {
       const firstVertex = coords[0];
       const distance = coord.distanceTo(new maptalks.Coordinate(firstVertex));
       const snapThreshold = map.getResolution() * 15;
@@ -141,7 +145,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     if (tempLineRef.current) tempLineRef.current.remove();
     if (tempLabelRef.current) tempLabelRef.current.remove();
     
-    const lastVertex = coords[coords.length - 1];
+    const lastVertex = coords.length > 0 ? coords[coords.length - 1] : null;
     if (lastVertex) {
         const tempLine = new maptalks.LineString([lastVertex, coord], {
             symbol: {
@@ -182,7 +186,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       startMarkerRef.current.setProperties({ isStartMarker: true });
       startMarkerRef.current.on('mousedown', (evt) => {
         const currentGeom = drawToolRef.current?.getCurrentGeometry();
-        if (currentGeom && currentGeom.getCoordinates().length > 2) {
+        if (currentGeom && currentGeom.getCoordinates()[0].length > 2) {
           evt.domEvent.stopPropagation();
           drawToolRef.current!.endDraw();
         }
@@ -198,7 +202,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
         setCurrentArea(formatArea(e.geometry.getArea()));
         
-        const lineString = new maptalks.LineString(e.geometry.getCoordinates());
+        const lineString = new maptalks.LineString(e.geometry.getCoordinates()[0]);
         updateDistanceLabels(lineString, drawingIdRef.current);
       }
     });
