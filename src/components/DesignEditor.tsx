@@ -30,7 +30,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   const labelLayerRef = useRef<maptalks.VectorLayer | null>(null);
   
   const ghostMarkerRef = useRef<maptalks.Marker | null>(null);
-  const tempLineRef = useRef<maptalks.LineString | null>(null);
   const tempLabelRef = useRef<maptalks.Label | null>(null);
   const drawingIdRef = useRef<string | null>(null);
   const startMarkerRef = useRef<maptalks.Marker | null>(null);
@@ -62,6 +61,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     });
 
     if (coords.length < 2) return;
+    // For a closed polygon from drawend, the last coord is the same as the first.
+    // The loop `i < coords.length - 1` correctly draws labels for all segments.
     for (let i = 0; i < coords.length - 1; i++) {
       const line = new maptalks.LineString([coords[i], coords[i + 1]]);
       const label = new maptalks.Label(formatDistance(line.getLength()), line.getCenter(), {
@@ -113,22 +114,24 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     ghostMarkerRef.current?.setCoordinates(coord);
 
+    // Clean up previous temporary label
+    if (tempLabelRef.current) tempLabelRef.current.remove();
+    tempLabelRef.current = null;
+
     if (coords.length > 0) {
       const lastVertex = coords[coords.length - 1];
-      if (tempLineRef.current) tempLineRef.current.remove();
-      if (tempLabelRef.current) tempLabelRef.current.remove();
-
-      tempLineRef.current = new maptalks.LineString([lastVertex, coord], {
-        symbol: isSnapped ? closingSymbol : defaultSymbol
-      }).addTo(labelLayerRef.current!);
       
-      const distance = tempLineRef.current.getLength();
-      tempLabelRef.current = new maptalks.Label(formatDistance(distance), tempLineRef.current.getCenter(), {
-        'textPlacement' : 'line',
-        'textDy': -15,
-        'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
-        'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
-      }).addTo(labelLayerRef.current!);
+      // The drawTool's symbol shows the line from the last vertex to the cursor.
+      // We only need to add a label for it, and only if we are not snapping to close the shape.
+      if (!isSnapped) {
+        const lineToCursor = new maptalks.LineString([lastVertex, coord]);
+        tempLabelRef.current = new maptalks.Label(formatDistance(lineToCursor.getLength()), lineToCursor.getCenter(), {
+          'textPlacement' : 'line',
+          'textDy': -15,
+          'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
+          'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
+        }).addTo(labelLayerRef.current!);
+      }
     }
   }, [activeTool]);
 
@@ -229,9 +232,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         });
         labelLayerRef.current.removeGeometry(geomsToRemove);
     }
-    if (tempLineRef.current) tempLineRef.current.remove();
     if (tempLabelRef.current) tempLabelRef.current.remove();
-    tempLineRef.current = null;
     tempLabelRef.current = null;
     
     setCurrentArea('0.0 ft²');
@@ -298,9 +299,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       });
 
       if (ghostMarkerRef.current) ghostMarkerRef.current.remove();
-      if (tempLineRef.current) tempLineRef.current.remove();
       if (tempLabelRef.current) tempLabelRef.current.remove();
-      ghostMarkerRef.current = tempLineRef.current = tempLabelRef.current = null;
+      ghostMarkerRef.current = tempLabelRef.current = null;
       
       clearCurrentShape();
     };
