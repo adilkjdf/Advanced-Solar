@@ -57,7 +57,9 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     }
   
     let coords: maptalks.Coordinate[];
-    if (geometry instanceof maptalks.Polygon) {
+    const isPolygon = geometry instanceof maptalks.Polygon;
+  
+    if (isPolygon) {
       coords = geometry.getShell();
     } else if (geometry instanceof maptalks.LineString) {
       coords = geometry.getCoordinates();
@@ -65,7 +67,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       return;
     }
   
-    if (!coords || coords.length < 2) return;
+    if (!coords || coords.length === 0) return;
   
     // Draw vertex markers
     coords.forEach(coord => {
@@ -76,7 +78,10 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       labelLayer.addGeometry(vertexMarker);
     });
   
-    // For a polygon shell with N points (N-1 unique vertices), or a line with N points, we have N-1 segments.
+    if (coords.length < 2) return;
+  
+    // For a polygon shell, we have N-1 segments if it's closed (last point repeats first)
+    // For a line string, we have N-1 segments for N points.
     const limit = coords.length - 1;
   
     for (let i = 0; i < limit; i++) {
@@ -126,7 +131,9 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         return;
     };
 
-    const coords = currentGeom.getCoordinates();
+    const shell = currentGeom.getShell();
+    if (!shell) return;
+    const coords = shell;
     let isSnapped = false;
     
     if (coords.length > 1) {
@@ -155,33 +162,35 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     if (tempLineRef.current) tempLineRef.current.remove();
     if (tempLabelRef.current) tempLabelRef.current.remove();
     
-    const lastVertex = coords[coords.length - 1];
-    if (lastVertex && typeof lastVertex.x === 'number' && !isNaN(lastVertex.x) && typeof lastVertex.y === 'number' && !isNaN(lastVertex.y)) {
-        if (lastVertex.x === coord.x && lastVertex.y === coord.y) return;
+    if (coords.length > 0) {
+        const lastVertex = coords[coords.length - 1];
+        if (lastVertex && typeof lastVertex.x === 'number' && !isNaN(lastVertex.x) && typeof lastVertex.y === 'number' && !isNaN(lastVertex.y)) {
+            if (lastVertex.x === coord.x && lastVertex.y === coord.y) return;
 
-        const tempLine = new maptalks.LineString([lastVertex, coord], {
-            symbol: {
-                lineColor: isSnapped ? '#22c55e' : '#f97316',
-                lineWidth: 2,
-                lineDasharray: [5, 5]
-            }
-        });
-        tempLine.addTo(labelLayerRef.current!);
-        tempLineRef.current = tempLine;
-
-        if (!isSnapped) {
-            const distance = tempLine.getLength();
-            const center = tempLine.getCenter();
-            if (!center || isNaN(center.x) || isNaN(center.y)) return;
-
-            const tempLabel = new maptalks.Label(formatDistance(distance), center, {
-                'textPlacement' : 'line',
-                'textDy': -15,
-                'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
-                'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
+            const tempLine = new maptalks.LineString([lastVertex, coord], {
+                symbol: {
+                    lineColor: isSnapped ? '#22c55e' : '#f97316',
+                    lineWidth: 2,
+                    lineDasharray: [5, 5]
+                }
             });
-            tempLabel.addTo(labelLayerRef.current!);
-            tempLabelRef.current = tempLabel;
+            tempLine.addTo(labelLayerRef.current!);
+            tempLineRef.current = tempLine;
+
+            if (!isSnapped) {
+                const distance = tempLine.getLength();
+                const center = tempLine.getCenter();
+                if (!center || isNaN(center.x) || isNaN(center.y)) return;
+
+                const tempLabel = new maptalks.Label(formatDistance(distance), center, {
+                    'textPlacement' : 'line',
+                    'textDy': -15,
+                    'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
+                    'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
+                });
+                tempLabel.addTo(labelLayerRef.current!);
+                tempLabelRef.current = tempLabel;
+            }
         }
     }
   }, [activeTool]);
@@ -203,7 +212,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       startMarkerRef.current.setProperties({ isStartMarker: true });
       startMarkerRef.current.on('mousedown', (evt) => {
         const currentGeom = drawToolRef.current?.getCurrentGeometry();
-        if (currentGeom && currentGeom.getCoordinates().length > 2) {
+        if (currentGeom && currentGeom.getShell().length > 2) {
           evt.domEvent.stopPropagation();
           drawToolRef.current!.endDraw();
         }
