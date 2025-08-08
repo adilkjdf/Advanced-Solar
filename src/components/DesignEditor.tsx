@@ -24,6 +24,7 @@ const defaultSymbol = {
 };
 
 const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) => {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<maptalks.Map | null>(null);
   const segmentLayerRef = useRef<maptalks.VectorLayer | null>(null);
   const labelLayerRef = useRef<maptalks.VectorLayer | null>(null);
@@ -53,9 +54,9 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     if (coords.length < 2) return;
 
-    for (let i = 0; i < coords.length - 1; i++) {
+    for (let i = 0; i < coords.length; i++) {
       const p1 = coords[i];
-      const p2 = coords[i+1];
+      const p2 = coords[(i + 1) % coords.length]; // Wrap around for the last segment
       const line = new maptalks.LineString([p1, p2]);
       const label = new maptalks.Label(formatDistance(line.getLength()), line.getCenter(), {
         'textPlacement' : 'line', 'textDy': -15,
@@ -68,8 +69,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   }, []);
 
   useEffect(() => {
-    if (mapInstanceRef.current && project.coordinates) {
-      const map = new maptalks.Map(mapInstanceRef.current, {
+    if (mapContainerRef.current && !mapInstanceRef.current && project.coordinates) {
+      const map = new maptalks.Map(mapContainerRef.current, {
         center: [project.coordinates.lng, project.coordinates.lat],
         zoom: 19, pitch: 0, bearing: 0, dragRotate: true,
         baseLayer: new maptalks.TileLayer('base', { urlTemplate: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}' }),
@@ -113,7 +114,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   }, []);
 
   const clearCurrentShape = () => {
-    // This is now handled by the MapDrawingTool, but we can keep it for other potential uses
     setCurrentArea('0.0 ft²');
   };
 
