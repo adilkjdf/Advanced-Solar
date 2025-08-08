@@ -118,21 +118,10 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     if (tempLabelRef.current) tempLabelRef.current.remove();
     tempLabelRef.current = null;
 
-    if (coords.length > 0) {
-      const lastVertex = coords[coords.length - 1];
-      
-      // The drawTool's symbol shows the line from the last vertex to the cursor.
-      // We only need to add a label for it, and only if we are not snapping to close the shape.
-      if (!isSnapped) {
-        const lineToCursor = new maptalks.LineString([lastVertex, coord]);
-        tempLabelRef.current = new maptalks.Label(formatDistance(lineToCursor.getLength()), lineToCursor.getCenter(), {
-          'textPlacement' : 'line',
-          'textDy': -15,
-          'boxStyle' : { 'padding' : [6, 4], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
-          'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
-        }).addTo(labelLayerRef.current!);
-      }
-    }
+    // The temporary label logic that was here has been removed to prevent showing
+    // a measurement for the line segment that is currently being drawn.
+    // Measurements will only appear for committed segments after a click.
+
   }, [activeTool]);
 
   const setupDrawingListeners = useCallback(() => {
