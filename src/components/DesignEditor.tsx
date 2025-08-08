@@ -120,11 +120,11 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     
     if (coords.length > 2) {
       const firstVertex = coords[0];
-      const distance = map.distanceTo(coord, firstVertex);
+      const distance = coord.distanceTo(new maptalks.Coordinate(firstVertex));
       const snapThreshold = map.getResolution() * 15;
 
       if (distance < snapThreshold) {
-        coord = firstVertex;
+        coord = new maptalks.Coordinate(firstVertex);
         isSnapped = true;
         drawTool.setSymbol(closingSymbol);
         ghostMarker.setCoordinates(firstVertex);
