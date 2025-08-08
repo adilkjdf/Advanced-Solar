@@ -42,7 +42,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   };
   const closingSymbol = { ...defaultSymbol, lineColor: '#22c55e' };
 
-  const updateDistanceLabels = useCallback((geometry: maptalks.Polygon, segmentId: string) => {
+  const updateDistanceLabels = useCallback((geometry: maptalks.Polygon, segmentId: string, isDrawing: boolean) => {
     if (!geometry || !labelLayerRef.current) return;
     
     const oldLabels = labelLayerRef.current.getGeometries().filter(g => g.getProperties()?.segmentId === segmentId);
@@ -61,9 +61,10 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     });
 
     if (coords.length < 2) return;
-    // For a closed polygon from drawend, the last coord is the same as the first.
-    // The loop `i < coords.length - 1` correctly draws labels for all segments.
-    for (let i = 0; i < coords.length - 1; i++) {
+    
+    const segmentsCount = isDrawing ? coords.length - 2 : coords.length - 1;
+
+    for (let i = 0; i < segmentsCount; i++) {
       const line = new maptalks.LineString([coords[i], coords[i + 1]]);
       const label = new maptalks.Label(formatDistance(line.getLength()), line.getCenter(), {
         'textPlacement' : 'line',
@@ -151,7 +152,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     drawTool.on('drawvertex', (e: any) => {
       if (e.geometry && drawingIdRef.current) {
         setCurrentArea(formatArea(e.geometry.getArea()));
-        updateDistanceLabels(e.geometry, drawingIdRef.current);
+        updateDistanceLabels(e.geometry, drawingIdRef.current, true);
       }
     });
     drawTool.on('drawend', (e: any) => {
@@ -173,7 +174,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         startMarkerRef.current = null;
       }
       
-      updateDistanceLabels(e.geometry, newSegmentId);
+      updateDistanceLabels(e.geometry, newSegmentId, false);
 
       const polygon = maptalks.Geometry.fromJSON(newSegment.geometry).setSymbol(defaultSymbol).setId(newSegment.id);
       segmentLayerRef.current?.addGeometry(polygon);
@@ -257,7 +258,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         geom.startEdit();
         geom.on('editend', (e: any) => {
           const editedGeoJSON = e.target.toJSON();
-          updateDistanceLabels(e.target, e.target.getId());
+          updateDistanceLabels(e.target, e.target.getId(), false);
           setFieldSegments(prev => prev.map(seg =>
             seg.id === e.target.getId()
               ? { ...seg, geometry: editedGeoJSON, area: e.target.getArea() }
