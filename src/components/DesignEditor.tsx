@@ -25,7 +25,7 @@ const defaultSymbol = {
 
 const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<maptalks.Map | null>(null);
+  const [map, setMap] = useState<maptalks.Map | null>(null);
   const segmentLayerRef = useRef<maptalks.VectorLayer | null>(null);
   const labelLayerRef = useRef<maptalks.VectorLayer | null>(null);
   
@@ -69,15 +69,15 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   }, []);
 
   useEffect(() => {
-    if (mapContainerRef.current && !mapInstanceRef.current && project.coordinates) {
-      const map = new maptalks.Map(mapContainerRef.current, {
+    if (mapContainerRef.current && !map && project.coordinates) {
+      const mapInstance = new maptalks.Map(mapContainerRef.current, {
         center: [project.coordinates.lng, project.coordinates.lat],
         zoom: 19, pitch: 0, bearing: 0, dragRotate: true,
         baseLayer: new maptalks.TileLayer('base', { urlTemplate: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}' }),
       });
-      mapInstanceRef.current = map;
-      segmentLayerRef.current = new maptalks.VectorLayer('fieldSegments').addTo(map);
-      labelLayerRef.current = new maptalks.VectorLayer('labels').addTo(map);
+      setMap(mapInstance);
+      segmentLayerRef.current = new maptalks.VectorLayer('fieldSegments').addTo(mapInstance);
+      labelLayerRef.current = new maptalks.VectorLayer('labels').addTo(mapInstance);
       
       const threeLayer = new ThreeLayer('three', { forceRenderOnMoving: true, forceRenderOnRotating: true });
       threeLayer.prepareToDraw = (gl, scene) => {
@@ -85,16 +85,14 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         light.position.set(0, -10, 10).normalize();
         scene.add(light);
       };
-      map.addLayer(threeLayer);
+      mapInstance.addLayer(threeLayer);
       
       return () => {
-        if (mapInstanceRef.current) {
-          mapInstanceRef.current.remove();
-          mapInstanceRef.current = null;
-        }
+        mapInstance.remove();
+        setMap(null);
       };
     }
-  }, [project.coordinates]);
+  }, [project.coordinates, map]);
 
   const handleCreateSegment = useCallback((segment: FieldSegment) => {
     const polygon = maptalks.Geometry.fromJSON(segment.geometry) as maptalks.Polygon;
@@ -203,7 +201,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       <div className="flex-1 relative">
         <div ref={mapContainerRef} className="w-full h-full" />
         <MapDrawingTool
-          map={mapInstanceRef.current}
+          map={map}
           enabled={activeTool === 'draw'}
           onCreate={handleCreateSegment}
           onUpdate={handleDrawingUpdate}
