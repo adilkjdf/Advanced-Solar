@@ -107,17 +107,13 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     
     if (!mouseCoord || typeof mouseCoord.x !== 'number' || isNaN(mouseCoord.x) || typeof mouseCoord.y !== 'number' || isNaN(mouseCoord.y)) return;
 
-    // Ghost marker logic
     if (!ghostMarkerRef.current && labelLayerRef.current) {
-        ghostMarkerRef.current = new maptalks.Marker(mouseCoord, {
-          symbol: defaultGhostSymbol
-        }).addTo(labelLayerRef.current);
+        ghostMarkerRef.current = new maptalks.Marker(mouseCoord, { symbol: defaultGhostSymbol }).addTo(labelLayerRef.current);
     }
     if (ghostMarkerRef.current) {
         ghostMarkerRef.current.setCoordinates(mouseCoord).show();
     }
 
-    // Clean up previous temp line/label
     if (tempLineRef.current) tempLineRef.current.remove();
     if (tempLabelRef.current) tempLabelRef.current.remove();
 
@@ -130,7 +126,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     const lastVertex = coords[coords.length - 1];
     let isSnapped = false;
 
-    // Snapping logic
     if (coords.length > 1) {
       const firstVertex = coords[0];
       const distance = mouseCoord.distanceTo(new maptalks.Coordinate(firstVertex));
@@ -149,14 +144,15 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         if (ghostMarkerRef.current) ghostMarkerRef.current.setSymbol(defaultGhostSymbol);
     }
 
-    // Don't draw the temp line if we are snapped to the closing point
-    if (isSnapped) return;
+    const tempLine = new maptalks.LineString([lastVertex, mouseCoord]);
 
-    const tempLine = new maptalks.LineString([lastVertex, mouseCoord], {
-        symbol: { lineColor: '#f97316', lineWidth: 2, lineDasharray: [5, 5] }
-    });
-    tempLine.addTo(labelLayerRef.current!);
-    tempLineRef.current = tempLine;
+    if (!isSnapped) {
+      tempLine.setSymbol({ lineColor: '#f97316', lineWidth: 2, lineDasharray: [5, 5] });
+      tempLine.addTo(labelLayerRef.current!);
+      tempLineRef.current = tempLine;
+    } else {
+      tempLineRef.current = null;
+    }
 
     const distance = tempLine.getLength();
     const center = tempLine.getCenter();
