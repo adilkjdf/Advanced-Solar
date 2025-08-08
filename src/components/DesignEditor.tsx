@@ -15,6 +15,17 @@ interface DesignEditorProps {
 
 type EditorTool = 'none' | 'draw' | 'edit' | 'delete';
 
+const defaultSymbol = {
+  lineColor: '#f97316',
+  lineWidth: 3,
+  polygonFill: '#f97316',
+  polygonOpacity: 0.3,
+};
+const closingSymbol = { ...defaultSymbol, lineColor: '#22c55e' };
+
+const defaultGhostSymbol = { 'markerType': 'ellipse', 'markerFill': '#22c55e', 'markerWidth': 10, 'markerHeight': 10, 'markerLineWidth': 0 };
+const snapGhostSymbol = { 'markerType': 'ellipse', 'markerFill': '#22c55e', 'markerWidth': 14, 'markerHeight': 14, 'markerLineWidth': 2, 'markerLineColor': '#ffffff' };
+
 const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<maptalks.Map | null>(null);
@@ -33,14 +44,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   const tempLabelRef = useRef<maptalks.Label | null>(null);
   const drawingIdRef = useRef<string | null>(null);
   const startMarkerRef = useRef<maptalks.Marker | null>(null);
-
-  const defaultSymbol = {
-    lineColor: '#f97316',
-    lineWidth: 3,
-    polygonFill: '#f97316',
-    polygonOpacity: 0.3,
-  };
-  const closingSymbol = { ...defaultSymbol, lineColor: '#22c55e' };
 
   const updateDistanceLabels = useCallback((geometry: maptalks.Polygon, segmentId: string, isDrawing: boolean) => {
     if (!geometry || !labelLayerRef.current) return;
@@ -78,51 +81,53 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   }, []);
 
   const handleMouseMove = useCallback((e: any) => {
-    if (activeTool !== 'draw' || !mapInstanceRef.current) return;
+    if (activeTool !== 'draw' || !mapInstanceRef.current || !drawToolRef.current) return;
+    
+    const map = mapInstanceRef.current;
+    const drawTool = drawToolRef.current;
     let coord = e.coordinate;
     if (!coord || typeof coord.x !== 'number' || typeof coord.y !== 'number') {
       return;
     }
 
-    const currentGeom = drawToolRef.current?.getCurrentGeometry();
+    if (!ghostMarkerRef.current && labelLayerRef.current) {
+        ghostMarkerRef.current = new maptalks.Marker(coord, {
+          symbol: defaultGhostSymbol
+        }).addTo(labelLayerRef.current);
+    }
+
+    const ghostMarker = ghostMarkerRef.current;
+    if (!ghostMarker) return;
+
+    const currentGeom = drawTool.getCurrentGeometry();
     if (!currentGeom) {
-        if (!ghostMarkerRef.current) {
-            ghostMarkerRef.current = new maptalks.Marker(coord, {
-              symbol: { 'markerType': 'ellipse', 'markerFill': '#22c55e', 'markerWidth': 10, 'markerHeight': 10, 'markerLineWidth': 0 }
-            }).addTo(labelLayerRef.current!);
-          } else {
-            ghostMarkerRef.current.setCoordinates(coord);
-          }
+        ghostMarker.setCoordinates(coord).show();
         return;
     };
 
     const coords = currentGeom.getCoordinates()[0];
-    let isSnapped = false;
-
+    
     if (coords.length > 2) {
       const firstVertex = coords[0];
-      const distance = mapInstanceRef.current.distanceTo(coord, firstVertex);
-      const snapThreshold = mapInstanceRef.current.getResolution() * 15;
+      const distance = map.distanceTo(coord, firstVertex);
+      const snapThreshold = map.getResolution() * 15;
 
       if (distance < snapThreshold) {
-        coord = firstVertex;
-        isSnapped = true;
-        currentGeom.setSymbol(closingSymbol);
-        ghostMarkerRef.current?.hide();
+        // Snapped state
+        drawTool.setSymbol(closingSymbol);
+        ghostMarker.setCoordinates(firstVertex);
+        ghostMarker.setSymbol(snapGhostSymbol);
       } else {
-        currentGeom.setSymbol(defaultSymbol);
-        ghostMarkerRef.current?.show();
+        // Not snapped state
+        drawTool.setSymbol(defaultSymbol);
+        ghostMarker.setCoordinates(coord);
+        ghostMarker.setSymbol(defaultGhostSymbol);
       }
+    } else {
+      // Not enough vertices to close yet
+      ghostMarker.setCoordinates(coord);
+      ghostMarker.setSymbol(defaultGhostSymbol);
     }
-
-    if (!isSnapped) {
-      ghostMarkerRef.current?.setCoordinates(coord);
-    }
-
-    // Clean up previous temporary label
-    if (tempLabelRef.current) tempLabelRef.current.remove();
-    tempLabelRef.current = null;
-
   }, [activeTool]);
 
   const setupDrawingListeners = useCallback(() => {
@@ -156,7 +161,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       }
     });
     drawTool.on('drawend', (e: any) => {
-      ghostMarkerRef.current?.show();
+      ghostMarkerRef.current?.hide();
+      drawTool.setSymbol(defaultSymbol);
       if (!e.geometry) return;
       
       const newSegmentId = maptalks.Util.UID();
@@ -215,7 +221,11 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   }, [project.coordinates, setupDrawingListeners]);
 
   const clearCurrentShape = () => {
-    drawToolRef.current?.endDraw();
+    const drawTool = drawToolRef.current;
+    if (drawTool) {
+        drawTool.endDraw();
+        drawTool.setSymbol(defaultSymbol);
+    }
     if (labelLayerRef.current) {
         const geomsToRemove = labelLayerRef.current.getGeometries().filter(g => {
             const props = g.getProperties();
@@ -226,8 +236,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     if (tempLabelRef.current) tempLabelRef.current.remove();
     tempLabelRef.current = null;
     
+    ghostMarkerRef.current?.hide();
     setCurrentArea('0.0 ft²');
-    ghostMarkerRef.current?.show();
   };
 
   const handleDeleteSegment = (segmentId: string) => {
@@ -277,6 +287,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     return () => {
       drawTool.disable();
+      drawTool.setSymbol(defaultSymbol);
       map.off('mousemove', handleMouseMove);
       
       const container = map.getContainer();
@@ -289,6 +300,11 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         geom.off('click', handleDeleteClick);
         geom.off('editend');
       });
+
+      if (ghostMarkerRef.current) {
+        ghostMarkerRef.current.remove();
+        ghostMarkerRef.current = null;
+      }
 
       clearCurrentShape();
     };
