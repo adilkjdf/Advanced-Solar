@@ -114,12 +114,12 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
       if (distance < snapThreshold) {
         // Snapped state
-        drawTool.setSymbol(closingSymbol);
+        currentGeom.setSymbol(closingSymbol);
         ghostMarker.setCoordinates(firstVertex);
         ghostMarker.setSymbol(snapGhostSymbol);
       } else {
         // Not snapped state
-        drawTool.setSymbol(defaultSymbol);
+        currentGeom.setSymbol(defaultSymbol);
         ghostMarker.setCoordinates(coord);
         ghostMarker.setSymbol(defaultGhostSymbol);
       }
