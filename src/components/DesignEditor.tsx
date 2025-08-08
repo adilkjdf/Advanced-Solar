@@ -123,7 +123,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     let isSnapped = false;
     
-    if (coords.length > 4) {
+    // Activate snap-to-close functionality only when drawing the 4th point or later
+    if (coords.length > 3) {
       const firstVertex = coords[0];
       const distance = coord.distanceTo(new maptalks.Coordinate(firstVertex));
       const snapThreshold = map.getResolution() * 15;
