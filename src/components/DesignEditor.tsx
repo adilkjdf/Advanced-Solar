@@ -131,9 +131,12 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         return;
     };
 
-    const shell = currentGeom.getShell();
-    if (!shell) return;
-    const coords = shell;
+    if (typeof currentGeom.getCoordinates !== 'function') {
+      return;
+    }
+    const coords = currentGeom.getCoordinates();
+    if (!coords) return;
+
     let isSnapped = false;
     
     if (coords.length > 1) {
@@ -212,7 +215,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       startMarkerRef.current.setProperties({ isStartMarker: true });
       startMarkerRef.current.on('mousedown', (evt) => {
         const currentGeom = drawToolRef.current?.getCurrentGeometry();
-        if (currentGeom && currentGeom.getShell().length > 2) {
+        if (currentGeom && currentGeom.getCoordinates().length > 2) {
           evt.domEvent.stopPropagation();
           drawToolRef.current!.endDraw();
         }
