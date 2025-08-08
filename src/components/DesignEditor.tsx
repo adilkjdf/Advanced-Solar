@@ -312,7 +312,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     if (labelLayerRef.current && activeDrawingId) {
         const geomsToRemove = labelLayerRef.current.getGeometries().filter(g => {
             const props = g.getProperties();
-            return props.segmentId === activeDrawingId;
+            return props && props.segmentId === activeDrawingId;
         });
         labelLayerRef.current.removeGeometry(geomsToRemove);
     }
