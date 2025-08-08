@@ -1,22 +1,40 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { MapContainer, TileLayer, FeatureGroup } from 'react-leaflet';
-import { EditControl } from 'react-leaflet-draw';
-import L, { LatLngExpression } from 'leaflet';
-import 'leaflet-draw';
+import React, { useState, useCallback } from 'react';
+import Map, { useControl, NavigationControl, ScaleControl } from 'react-map-gl';
+import maplibregl from 'maplibre-gl';
+import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import { ProjectData, Design, FieldSegment } from '../types/project';
-import { ArrowLeft, Settings, Trash2, LayoutGrid, Crosshair, GitBranch, PlusCircle } from 'lucide-react';
+import { ArrowLeft, Trash2, LayoutGrid, Crosshair, GitBranch, PlusCircle } from 'lucide-react';
 import * as turf from '@turf/turf';
 import { formatArea } from '../utils/mapUtils';
 
-// Deleting a polygon from the map is buggy in leaflet-draw, this is a workaround
-// @ts-ignore
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-});
+// --- DrawControl Component ---
+// This component integrates mapbox-gl-draw with react-map-gl
+type DrawControlProps = ConstructorParameters<typeof MapboxDraw>[0] & {
+  position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  onCreate?: (evt: { features: any[] }) => void;
+  onUpdate?: (evt: { features: any[]; action: string }) => void;
+  onDelete?: (evt: { features: any[] }) => void;
+};
 
+function DrawControl(props: DrawControlProps) {
+  useControl<MapboxDraw>(
+    () => new MapboxDraw(props),
+    ({ map }) => {
+      map.on('draw.create', props.onCreate!);
+      map.on('draw.update', props.onUpdate!);
+      map.on('draw.delete', props.onDelete!);
+    },
+    ({ map }) => {
+      map.off('draw.create', props.onCreate!);
+      map.off('draw.update', props.onUpdate!);
+      map.off('draw.delete', props.onDelete!);
+    },
+    { position: props.position }
+  );
+  return null;
+}
+
+// --- Main DesignEditor Component ---
 interface DesignEditorProps {
   project: ProjectData;
   design: Design;
@@ -24,57 +42,42 @@ interface DesignEditorProps {
 }
 
 const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) => {
-  const [fieldSegments, setFieldSegments] = useState<FieldSegment[]>([]);
-  const featureGroupRef = useRef<L.FeatureGroup>(null);
+  const [features, setFeatures] = useState<Record<string, any>>({});
   const [activeSidebarTab, setActiveSidebarTab] = useState('mechanical');
 
-  const handleCreate = (e: any) => {
-    const { layerType, layer } = e;
-    if (layerType === 'polygon') {
-      const geoJSON = layer.toGeoJSON();
-      const newSegment: FieldSegment = {
-        id: L.Util.stamp(layer), // Use Leaflet's internal ID
-        geometry: geoJSON.geometry,
-        area: turf.area(geoJSON),
-      };
-      setFieldSegments(prev => [...prev, newSegment]);
-    }
-  };
-
-  const handleEdit = (e: any) => {
-    const { layers } = e;
-    layers.eachLayer((layer: any) => {
-      const geoJSON = layer.toGeoJSON();
-      const segmentId = L.Util.stamp(layer);
-      setFieldSegments(prev => prev.map(seg => 
-        seg.id === segmentId 
-          ? { ...seg, geometry: geoJSON.geometry, area: turf.area(geoJSON) }
-          : seg
-      ));
-    });
-  };
-
-  const handleDelete = (e: any) => {
-    const { layers } = e;
-    const deletedIds = Object.keys(layers._layers).map(id => parseInt(id, 10));
-    setFieldSegments(prev => prev.filter(seg => !deletedIds.includes(Number(seg.id))));
-  };
-  
-  const handleDeleteSegment = (segmentId: string) => {
-    if (featureGroupRef.current) {
-      const layerToDelete = Object.values(featureGroupRef.current.getLayers()).find(
-        (layer: any) => L.Util.stamp(layer) === Number(segmentId)
-      );
-      if (layerToDelete) {
-        featureGroupRef.current.removeLayer(layerToDelete);
-        setFieldSegments(prev => prev.filter(seg => seg.id !== segmentId));
+  const onUpdate = useCallback((e: { features: any[] }) => {
+    setFeatures(prev => {
+      const newFeatures = { ...prev };
+      for (const f of e.features) {
+        newFeatures[f.id] = f;
       }
-    }
-  };
+      return newFeatures;
+    });
+  }, []);
 
-  const mapCenter: LatLngExpression = project.coordinates
-    ? [project.coordinates.lat, project.coordinates.lng]
-    : [37.7749, -122.4194];
+  const onDelete = useCallback((e: { features: any[] }) => {
+    setFeatures(prev => {
+      const newFeatures = { ...prev };
+      for (const f of e.features) {
+        delete newFeatures[f.id];
+      }
+      return newFeatures;
+    });
+  }, []);
+
+  const fieldSegments: FieldSegment[] = Object.values(features).map(f => ({
+    id: f.id,
+    geometry: f.geometry,
+    area: turf.area(f),
+  }));
+
+  const handleDeleteSegment = (segmentId: string) => {
+    // This will be handled by the draw control's delete button
+    // We can keep this function if we want to delete from the sidebar
+    const newFeatures = { ...features };
+    delete newFeatures[segmentId];
+    setFeatures(newFeatures);
+  };
 
   const sidebarTabs = [
     { id: 'mechanical', label: 'Mechanical', icon: LayoutGrid },
@@ -82,6 +85,14 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     { id: 'electrical', label: 'Electrical', icon: GitBranch },
     { id: 'advanced', label: 'Advanced', icon: PlusCircle },
   ];
+
+  const initialViewState = {
+    longitude: project.coordinates?.lng || -122.4194,
+    latitude: project.coordinates?.lat || 37.7749,
+    zoom: 18,
+    pitch: 45,
+    bearing: 0,
+  };
 
   return (
     <div className="w-screen h-screen flex bg-gray-800">
@@ -128,35 +139,59 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         </div>
       </div>
       <div className="flex-1 relative">
-        <MapContainer center={mapCenter} zoom={19} className="w-full h-full">
-          <TileLayer
-            url="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
-            attribution="&copy; Google Maps"
+        <Map
+          initialViewState={initialViewState}
+          mapLib={maplibregl}
+          style={{ width: '100%', height: '100%' }}
+          mapStyle={{
+            version: 8,
+            sources: { 'google-satellite': { type: 'raster', tiles: ['https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'], tileSize: 256 } },
+            layers: [{ id: 'raster-layer', type: 'raster', source: 'google-satellite' }]
+          }}
+        >
+          <NavigationControl position="top-right" />
+          <ScaleControl />
+          <DrawControl
+            position="top-right"
+            displayControlsDefault={false}
+            controls={{ polygon: true, trash: true }}
+            onCreate={onUpdate}
+            onUpdate={onUpdate}
+            onDelete={onDelete}
+            defaultMode="draw_polygon"
+            styles={[
+              // ACTIVE (being drawn)
+              {
+                id: 'gl-draw-polygon-fill-active',
+                type: 'fill',
+                filter: ['all', ['==', '$type', 'Polygon'], ['==', 'active', 'true']],
+                paint: { 'fill-color': '#f97316', 'fill-opacity': 0.1 }
+              },
+              {
+                id: 'gl-draw-polygon-stroke-active',
+                type: 'line',
+                filter: ['all', ['==', '$type', 'Polygon'], ['==', 'active', 'true']],
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#f97316', 'line-width': 3 }
+              },
+              // INACTIVE
+              {
+                id: 'gl-draw-polygon-fill-inactive',
+                type: 'fill',
+                filter: ['all', ['==', '$type', 'Polygon'], ['==', 'active', 'false']],
+                paint: { 'fill-color': '#f97316', 'fill-opacity': 0.1 }
+              },
+              {
+                id: 'gl-draw-polygon-stroke-inactive',
+                type: 'line',
+                filter: ['all', ['==', '$type', 'Polygon'], ['==', 'active', 'false']],
+                layout: { 'line-cap': 'round', 'line-join': 'round' },
+                paint: { 'line-color': '#f97316', 'line-width': 3 }
+              },
+            ]}
           />
-          <FeatureGroup ref={featureGroupRef}>
-            <EditControl
-              position="topright"
-              onCreated={handleCreate}
-              onEdited={handleEdit}
-              onDeleted={handleDelete}
-              draw={{
-                rectangle: false,
-                circle: false,
-                circlemarker: false,
-                marker: false,
-                polyline: false,
-                polygon: {
-                  allowIntersection: false,
-                  shapeOptions: {
-                    color: '#f97316',
-                    weight: 3,
-                  },
-                },
-              }}
-            />
-          </FeatureGroup>
-        </MapContainer>
-        <button onClick={onBack} className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm text-gray-800 font-semibold px-4 py-2 rounded-lg shadow-lg hover:bg-white flex items-center space-x-2 z-[1000]">
+        </Map>
+        <button onClick={onBack} className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm text-gray-800 font-semibold px-4 py-2 rounded-lg shadow-lg hover:bg-white flex items-center space-x-2 z-10">
           <ArrowLeft className="w-5 h-5" />
           <span>Back to Project</span>
         </button>

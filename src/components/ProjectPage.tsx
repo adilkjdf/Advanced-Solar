@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, MapPin, Settings, Eye, Share2, FileText, Plus, Trash2, Edit } from 'lucide-react';
 import { ProjectData, Design } from '../types/project';
-import * as maptalks from 'maptalks';
 import NewDesignModal from './NewDesignModal';
 import DesignEditor from './DesignEditor';
 import { supabase } from '../integrations/supabase/client';
+import Map, { Marker } from 'react-map-gl';
+import maplibregl from 'maplibre-gl';
 
 interface ProjectPageProps {
   project: ProjectData;
@@ -15,9 +16,6 @@ type TabType = 'designs' | 'conditions' | 'shading' | 'sharing' | 'reports';
 
 const ProjectPage: React.FC<ProjectPageProps> = ({ project, onBack }) => {
   const [activeTab, setActiveTab] = useState<TabType>('designs');
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<maptalks.Map | null>(null);
-
   const [designs, setDesigns] = useState<Design[]>([]);
   const [isNewDesignModalOpen, setIsNewDesignModalOpen] = useState(false);
   const [editingDesign, setEditingDesign] = useState<Design | null>(null);
@@ -62,35 +60,6 @@ const ProjectPage: React.FC<ProjectPageProps> = ({ project, onBack }) => {
       setIsNewDesignModalOpen(false);
     }
   };
-
-  useEffect(() => {
-    if (mapContainerRef.current && !mapInstanceRef.current && project.coordinates) {
-      const map = new maptalks.Map(mapContainerRef.current, {
-        center: [project.coordinates.lng, project.coordinates.lat],
-        zoom: 18,
-        baseLayer: new maptalks.TileLayer('base', {
-          urlTemplate: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
-          attribution: '&copy; <a href="https://www.google.com/maps">Google Maps</a>',
-        }),
-        draggable: false,
-        scrollWheelZoom: false,
-        doubleClickZoom: false,
-      });
-
-      const layer = new maptalks.VectorLayer('markerLayer').addTo(map);
-      const marker = new maptalks.Marker([project.coordinates.lng, project.coordinates.lat]);
-      layer.addGeometry(marker);
-
-      mapInstanceRef.current = map;
-    }
-
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
-  }, [project.coordinates]);
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -182,8 +151,28 @@ const ProjectPage: React.FC<ProjectPageProps> = ({ project, onBack }) => {
       <div className="max-w-7xl mx-auto p-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-1 space-y-6">
-            <div className="bg-white rounded-lg shadow-sm border">
-              <div ref={mapContainerRef} className="h-64 w-full rounded-t-lg" />
+            <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+              <div className="h-64 w-full">
+                {project.coordinates && (
+                  <Map
+                    initialViewState={{
+                      longitude: project.coordinates.lng,
+                      latitude: project.coordinates.lat,
+                      zoom: 17
+                    }}
+                    mapLib={maplibregl}
+                    style={{ width: '100%', height: '100%' }}
+                    mapStyle={{
+                      version: 8,
+                      sources: { 'google-satellite': { type: 'raster', tiles: ['https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'], tileSize: 256 } },
+                      layers: [{ id: 'raster-layer', type: 'raster', source: 'google-satellite' }]
+                    }}
+                    interactive={false}
+                  >
+                    <Marker longitude={project.coordinates.lng} latitude={project.coordinates.lat} />
+                  </Map>
+                )}
+              </div>
               <div className="p-4">
                 <h3 className="font-semibold text-gray-800">{project.address}</h3>
                 <p className="text-sm text-gray-600">{project.coordinates?.lat.toFixed(4)}, {project.coordinates?.lng.toFixed(4)}</p>
