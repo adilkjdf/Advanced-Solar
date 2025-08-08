@@ -45,6 +45,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   const tempLabelRef = useRef<maptalks.Label | null>(null);
   const drawingIdRef = useRef<string | null>(null);
   const startMarkerRef = useRef<maptalks.Marker | null>(null);
+  const snapTooltipRef = useRef<maptalks.Label | null>(null);
 
   const updateDistanceLabels = useCallback((geometry: maptalks.Geometry, segmentId: string) => {
     if (!geometry || !labelLayerRef.current) return;
@@ -121,7 +122,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     let isSnapped = false;
     
-    if (coords.length > 1) {
+    if (coords.length > 2) {
       const firstVertex = coords[0];
       const distance = coord.distanceTo(new maptalks.Coordinate(firstVertex));
       const snapThreshold = map.getResolution() * 15;
@@ -132,10 +133,24 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         drawTool.setSymbol(closingSymbol);
         ghostMarker.setCoordinates(firstVertex);
         ghostMarker.setSymbol(snapGhostSymbol);
+        
+        if (!snapTooltipRef.current && labelLayerRef.current) {
+            snapTooltipRef.current = new maptalks.Label('Click to close shape', coord, {
+                'boxStyle' : { 'padding' : [8, 6], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
+                'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
+            }).addTo(labelLayerRef.current);
+        }
+        if (snapTooltipRef.current) {
+            snapTooltipRef.current.setCoordinates(coord).show();
+        }
+
       } else {
         drawTool.setSymbol(defaultSymbol);
         ghostMarker.setCoordinates(coord);
         ghostMarker.setSymbol(defaultGhostSymbol);
+        if (snapTooltipRef.current) {
+            snapTooltipRef.current.hide();
+        }
       }
     } else {
       ghostMarker.setCoordinates(coord);
@@ -212,6 +227,11 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       tempLineRef.current = null;
       tempLabelRef.current = null;
 
+      if (snapTooltipRef.current) {
+        snapTooltipRef.current.remove();
+        snapTooltipRef.current = null;
+      }
+
       ghostMarkerRef.current?.hide();
       drawTool.setSymbol(defaultSymbol);
       
@@ -226,17 +246,31 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
       if (!e.geometry) return;
       
+      let polygon = e.geometry;
+      let shell = polygon.getShell();
+
+      if (shell.length > 3 && mapInstanceRef.current) {
+        const lastPoint = shell[shell.length - 2];
+        const secondLastPoint = shell[shell.length - 3];
+        const lastSegmentLength = new maptalks.Coordinate(lastPoint).distanceTo(new maptalks.Coordinate(secondLastPoint));
+        
+        if (lastSegmentLength < mapInstanceRef.current.getResolution() * 2) {
+            shell.splice(shell.length - 2, 1);
+            polygon.setCoordinates(shell);
+        }
+      }
+
       const newSegmentId = maptalks.Util.UID();
       const newSegment: FieldSegment = {
         id: newSegmentId,
-        geometry: e.geometry.toJSON(),
-        area: e.geometry.getArea(),
+        geometry: polygon.toJSON(),
+        area: polygon.getArea(),
       };
       
-      updateDistanceLabels(e.geometry, newSegmentId);
+      updateDistanceLabels(polygon, newSegmentId);
 
-      const polygon = maptalks.Geometry.fromJSON(newSegment.geometry).setSymbol(defaultSymbol).setId(newSegment.id);
-      segmentLayerRef.current?.addGeometry(polygon);
+      const finalPolygon = maptalks.Geometry.fromJSON(newSegment.geometry).setSymbol(defaultSymbol).setId(newSegment.id);
+      segmentLayerRef.current?.addGeometry(finalPolygon);
       setFieldSegments(prev => [...prev, newSegment]);
       
       drawingIdRef.current = null;
@@ -297,6 +331,11 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     tempLineRef.current = null;
     tempLabelRef.current = null;
     
+    if (snapTooltipRef.current) {
+        snapTooltipRef.current.remove();
+        snapTooltipRef.current = null;
+    }
+
     ghostMarkerRef.current?.hide();
     setCurrentArea('0.0 ft²');
   };
@@ -397,7 +436,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
                 <div className="flex items-center space-x-1 text-green-600"><Check className="w-4 h-4" /><span>Saved</span></div>
                 <div className="flex items-center space-x-2">
                   <button className="p-1 text-gray-500 hover:text-gray-800"><RotateCcw className="w-4 h-4" /></button>
-                  <button className="p-1 text-gray-500 hover:text-gray-800"><RotateCw className="w-4 h-4" /></button>
+                  <button className="p-1 text-gray-800 hover:text-gray-800"><RotateCw className="w-4 h-4" /></button>
                 </div>
               </div>
             </div>
