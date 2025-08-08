@@ -45,8 +45,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   const tempLabelRef = useRef<maptalks.Label | null>(null);
   const drawingIdRef = useRef<string | null>(null);
   const startMarkerRef = useRef<maptalks.Marker | null>(null);
-  const snapTooltipRef = useRef<maptalks.Label | null>(null);
-  const isSnappedRef = useRef(false);
 
   const updateDistanceLabels = useCallback((geometry: maptalks.Geometry, segmentId: string) => {
     if (!geometry || !labelLayerRef.current) return;
@@ -116,15 +114,10 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         return;
     };
 
-    let coords = currentGeom.getCoordinates();
-    if (currentGeom instanceof maptalks.Polygon) {
-        coords = coords[0] || [];
-    }
-
+    const coords = currentGeom.getCoordinates();
     let isSnapped = false;
     
-    // Activate snap-to-close functionality only when drawing the 4th point or later
-    if (coords.length > 3) {
+    if (coords.length > 1) { // Need at least 2 points to snap
       const firstVertex = coords[0];
       const distance = coord.distanceTo(new maptalks.Coordinate(firstVertex));
       const snapThreshold = map.getResolution() * 15;
@@ -135,35 +128,20 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         drawTool.setSymbol(closingSymbol);
         ghostMarker.setCoordinates(firstVertex);
         ghostMarker.setSymbol(snapGhostSymbol);
-        
-        if (!snapTooltipRef.current && labelLayerRef.current) {
-            snapTooltipRef.current = new maptalks.Label('Click to close shape', coord, {
-                'boxStyle' : { 'padding' : [8, 6], 'symbol' : { 'markerType' : 'square', 'markerFill' : 'rgba(0, 0, 0, 0.8)', 'markerLineWidth' : 0 }},
-                'textSymbol': { 'textFill' : '#ffffff', 'textSize' : 12 }
-            }).addTo(labelLayerRef.current);
-        }
-        if (snapTooltipRef.current) {
-            snapTooltipRef.current.setCoordinates(coord).show();
-        }
-
       } else {
         drawTool.setSymbol(defaultSymbol);
         ghostMarker.setCoordinates(coord);
         ghostMarker.setSymbol(defaultGhostSymbol);
-        if (snapTooltipRef.current) {
-            snapTooltipRef.current.hide();
-        }
       }
     } else {
       ghostMarker.setCoordinates(coord);
       ghostMarker.setSymbol(defaultGhostSymbol);
     }
-    isSnappedRef.current = isSnapped;
 
     if (tempLineRef.current) tempLineRef.current.remove();
     if (tempLabelRef.current) tempLabelRef.current.remove();
     
-    const lastVertex = coords.length > 0 ? coords[coords.length - 1] : null;
+    const lastVertex = coords[coords.length - 1];
     if (lastVertex) {
         const tempLine = new maptalks.LineString([lastVertex, coord], {
             symbol: {
@@ -195,13 +173,20 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       drawingIdRef.current = maptalks.Util.UID();
       
       startMarkerRef.current = new maptalks.Marker(e.coordinate, {
-        interactive: false,
+        interactive: true,
         symbol: {
           markerFile: 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>'),
           markerWidth: 20, markerHeight: 20,
         }
       });
       startMarkerRef.current.setProperties({ isStartMarker: true });
+      startMarkerRef.current.on('mousedown', (evt) => {
+        const currentGeom = drawToolRef.current?.getCurrentGeometry();
+        if (currentGeom && currentGeom.getCoordinates().length > 2) {
+          evt.domEvent.stopPropagation();
+          drawToolRef.current!.endDraw();
+        }
+      });
       labelLayerRef.current?.addGeometry(startMarkerRef.current);
     });
     drawTool.on('drawvertex', (e: any) => {
@@ -213,7 +198,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
         setCurrentArea(formatArea(e.geometry.getArea()));
         
-        const lineString = new maptalks.LineString(e.geometry.getCoordinates()[0]);
+        const lineString = new maptalks.LineString(e.geometry.getCoordinates());
         updateDistanceLabels(lineString, drawingIdRef.current);
       }
     });
@@ -222,11 +207,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       if (tempLabelRef.current) tempLabelRef.current.remove();
       tempLineRef.current = null;
       tempLabelRef.current = null;
-
-      if (snapTooltipRef.current) {
-        snapTooltipRef.current.remove();
-        snapTooltipRef.current = null;
-      }
 
       ghostMarkerRef.current?.hide();
       drawTool.setSymbol(defaultSymbol);
@@ -242,31 +222,17 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
       if (!e.geometry) return;
       
-      let polygon = e.geometry;
-      let shell = polygon.getShell();
-
-      if (shell.length > 3 && mapInstanceRef.current) {
-        const lastPoint = shell[shell.length - 2];
-        const secondLastPoint = shell[shell.length - 3];
-        const lastSegmentLength = new maptalks.Coordinate(lastPoint).distanceTo(new maptalks.Coordinate(secondLastPoint));
-        
-        if (lastSegmentLength < mapInstanceRef.current.getResolution() * 2) {
-            shell.splice(shell.length - 2, 1);
-            polygon.setCoordinates(shell);
-        }
-      }
-
       const newSegmentId = maptalks.Util.UID();
       const newSegment: FieldSegment = {
         id: newSegmentId,
-        geometry: polygon.toJSON(),
-        area: polygon.getArea(),
+        geometry: e.geometry.toJSON(),
+        area: e.geometry.getArea(),
       };
       
-      updateDistanceLabels(polygon, newSegmentId);
+      updateDistanceLabels(e.geometry, newSegmentId);
 
-      const finalPolygon = maptalks.Geometry.fromJSON(newSegment.geometry).setSymbol(defaultSymbol).setId(newSegment.id);
-      segmentLayerRef.current?.addGeometry(finalPolygon);
+      const polygon = maptalks.Geometry.fromJSON(newSegment.geometry).setSymbol(defaultSymbol).setId(newSegment.id);
+      segmentLayerRef.current?.addGeometry(polygon);
       setFieldSegments(prev => [...prev, newSegment]);
       
       drawingIdRef.current = null;
@@ -313,7 +279,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     if (labelLayerRef.current && activeDrawingId) {
         const geomsToRemove = labelLayerRef.current.getGeometries().filter(g => {
             const props = g.getProperties();
-            return props && props.segmentId === activeDrawingId;
+            return props.segmentId === activeDrawingId;
         });
         labelLayerRef.current.removeGeometry(geomsToRemove);
     }
@@ -327,11 +293,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     tempLineRef.current = null;
     tempLabelRef.current = null;
     
-    if (snapTooltipRef.current) {
-        snapTooltipRef.current.remove();
-        snapTooltipRef.current = null;
-    }
-
     ghostMarkerRef.current?.hide();
     setCurrentArea('0.0 ft²');
   };
@@ -357,17 +318,11 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     const handleDeleteClick = (e: any) => handleDeleteSegment(e.target.getId());
 
-    const handleMapClick = () => {
-      if (isSnappedRef.current) {
-        drawTool.endDraw();
-      }
-    };
-
     if (activeTool === 'draw') {
       map.getContainer().style.cursor = 'crosshair';
+      // Use drawstart to ensure we get the first coordinate.
       drawTool.on('drawstart', handleMouseMove);
       map.on('mousemove', handleMouseMove);
-      map.on('click', handleMapClick);
       drawTool.setMode('Polygon').enable();
     } else if (activeTool === 'edit') {
       segmentLayer.getGeometries().forEach((geom: any) => {
@@ -394,7 +349,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       drawTool.setSymbol(defaultSymbol);
       drawTool.off('drawstart', handleMouseMove);
       map.off('mousemove', handleMouseMove);
-      map.off('click', handleMapClick);
       
       const container = map.getContainer();
       if (container) {
