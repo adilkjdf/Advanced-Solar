@@ -46,17 +46,23 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
   const drawingIdRef = useRef<string | null>(null);
   const startMarkerRef = useRef<maptalks.Marker | null>(null);
 
-  const updateDistanceLabels = useCallback((geometry: maptalks.Polygon, segmentId: string, isDrawing: boolean) => {
+  const updateDistanceLabels = useCallback((geometry: maptalks.Geometry, segmentId: string) => {
     if (!geometry || !labelLayerRef.current) return;
     
-    const oldLabels = labelLayerRef.current.getGeometries().filter(g => g.getProperties()?.segmentId === segmentId);
+    const oldLabels = labelLayerRef.current.getGeometries().filter(g => g.getProperties()?.segmentId === segmentId && (g.getProperties().isDistanceLabel || g.getProperties().isVertex));
     if (oldLabels.length) {
       labelLayerRef.current.removeGeometry(oldLabels);
     }
   
-    const coords = geometry.getCoordinates()[0];
+    let coords;
+    if (geometry instanceof maptalks.Polygon) {
+        coords = geometry.getCoordinates()[0];
+    } else if (geometry instanceof maptalks.LineString) {
+        coords = geometry.getCoordinates();
+    } else {
+        return;
+    }
     
-    // Add vertex markers
     coords.forEach(coord => {
         const vertexMarker = new maptalks.Marker(coord, {
           symbol: { 'markerType': 'ellipse', 'markerFill': '#ffffff', 'markerWidth': 8, 'markerHeight': 8, 'markerLineWidth': 2, 'markerLineColor': '#f97316' }
@@ -66,10 +72,13 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
 
     if (coords.length < 2) return;
     
-    const segmentsCount = isDrawing ? coords.length - 2 : coords.length - 1;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const p1 = coords[i];
+      const p2 = coords[i+1];
+      // Don't draw label for the closing segment if it's a point and not a line
+      if (p1.x === p2.x && p1.y === p2.y) continue;
 
-    for (let i = 0; i < segmentsCount; i++) {
-      const line = new maptalks.LineString([coords[i], coords[i + 1]]);
+      const line = new maptalks.LineString([p1, p2]);
       const label = new maptalks.Label(formatDistance(line.getLength()), line.getCenter(), {
         'textPlacement' : 'line',
         'textDy': -15,
@@ -106,7 +115,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         return;
     };
 
-    const coords = currentGeom.getCoordinates()[0];
+    const coords = (currentGeom.getCoordinates().length && currentGeom.getCoordinates()[0].x) ? currentGeom.getCoordinates() : currentGeom.getCoordinates()[0];
     let isSnapped = false;
     
     if (coords.length > 2) {
@@ -130,7 +139,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       ghostMarker.setSymbol(defaultGhostSymbol);
     }
 
-    // Real-time measurement for the segment being drawn
     if (tempLineRef.current) tempLineRef.current.remove();
     if (tempLabelRef.current) tempLabelRef.current.remove();
     
@@ -190,7 +198,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         tempLabelRef.current = null;
 
         setCurrentArea(formatArea(e.geometry.getArea()));
-        updateDistanceLabels(e.geometry, drawingIdRef.current, true);
+        updateDistanceLabels(e.geometry, drawingIdRef.current);
       }
     });
     drawTool.on('drawend', (e: any) => {
@@ -219,7 +227,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         startMarkerRef.current = null;
       }
       
-      updateDistanceLabels(e.geometry, newSegmentId, false);
+      updateDistanceLabels(e.geometry, newSegmentId);
 
       const polygon = maptalks.Geometry.fromJSON(newSegment.geometry).setSymbol(defaultSymbol).setId(newSegment.id);
       segmentLayerRef.current?.addGeometry(polygon);
@@ -310,7 +318,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         geom.startEdit();
         geom.on('editend', (e: any) => {
           const editedGeoJSON = e.target.toJSON();
-          updateDistanceLabels(e.target, e.target.getId(), false);
+          updateDistanceLabels(e.target, e.target.getId());
           setFieldSegments(prev => prev.map(seg =>
             seg.id === e.target.getId()
               ? { ...seg, geometry: editedGeoJSON, area: e.target.getArea() }
