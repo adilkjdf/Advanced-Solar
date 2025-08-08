@@ -92,7 +92,8 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         setMap(null);
       };
     }
-  }, [project.coordinates, map]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.coordinates]);
 
   const handleCreateSegment = useCallback((segment: FieldSegment) => {
     const polygon = maptalks.Geometry.fromJSON(segment.geometry) as maptalks.Polygon;
