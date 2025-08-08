@@ -99,10 +99,6 @@ const MapDrawingTool: React.FC<MapDrawingToolProps> = ({ map, enabled, onUpdate,
   useEffect(() => {
     if (!map) return;
 
-    if (enabled && !tempLayerRef.current) {
-      tempLayerRef.current = new maptalks.VectorLayer('custom-drawing-tool').addTo(map);
-    }
-
     const handleMouseMove = (e: any) => redrawTempLayer(e.coordinate);
     const handleClick = () => {
       if (isSnappedRef.current) {
@@ -119,19 +115,24 @@ const MapDrawingTool: React.FC<MapDrawingToolProps> = ({ map, enabled, onUpdate,
     };
 
     if (enabled) {
-      map.getContainer().style.cursor = 'crosshair';
+      if (map.getContainer()) {
+        map.getContainer().style.cursor = 'crosshair';
+      }
       map.on('mousemove', handleMouseMove);
       map.on('click', handleClick);
       document.addEventListener('keydown', handleKeyDown);
     }
 
     return () => {
+      // Check if map is valid and has a container before trying to access it.
       if (map && map.getContainer()) {
         map.getContainer().style.cursor = 'grab';
+        map.off('mousemove', handleMouseMove);
+        map.off('click', handleClick);
       }
-      map.off('mousemove', handleMouseMove);
-      map.off('click', handleClick);
+      
       document.removeEventListener('keydown', handleKeyDown);
+      
       if (enabled) {
         resetState();
       }
