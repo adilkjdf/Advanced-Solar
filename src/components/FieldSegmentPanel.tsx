@@ -19,7 +19,7 @@ interface FieldSegmentPanelProps {
 
 const FieldSegmentPanel: React.FC<FieldSegmentPanelProps> = ({ segment, onBack, onDelete, onUpdate, isEditing, onStartEdit, onStopEdit, moduleOptions = [] }) => {
   const [formData, setFormData] = useState(segment);
-  const [activeTab, setActiveTab] = useState<'mechanical' | 'shadow'>('mechanical');
+  const [activeTab, setActiveTab] = useState<'configuration' | 'shadow'>('configuration');
 
   useEffect(() => {
     setFormData(segment);
@@ -38,7 +38,7 @@ const FieldSegmentPanel: React.FC<FieldSegmentPanelProps> = ({ segment, onBack, 
     { value: 'justify' as const, icon: AlignJustify },
   ];
 
-  const renderMechanicalTab = () => (
+  const renderConfigurationTab = () => (
     <>
       <div className="space-y-4">
         <FormField
@@ -199,11 +199,11 @@ const FieldSegmentPanel: React.FC<FieldSegmentPanelProps> = ({ segment, onBack, 
       {/* Tabs */}
       <div className="flex border-b mb-4">
         <button
-          onClick={() => setActiveTab('mechanical')}
-          className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium ${activeTab === 'mechanical' ? 'border-b-2 border-orange-500 text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}
+          onClick={() => setActiveTab('configuration')}
+          className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium ${activeTab === 'configuration' ? 'border-b-2 border-orange-500 text-orange-600' : 'text-gray-500 hover:text-gray-700'}`}
         >
           <Wrench className="w-4 h-4" />
-          <span>Mechanical</span>
+          <span>Configuration</span>
         </button>
         <button
           onClick={() => setActiveTab('shadow')}
@@ -215,7 +215,7 @@ const FieldSegmentPanel: React.FC<FieldSegmentPanelProps> = ({ segment, onBack, 
       </div>
 
       <div className="flex-grow overflow-y-auto pr-2">
-        {activeTab === 'mechanical' && renderMechanicalTab()}
+        {activeTab === 'configuration' && renderConfigurationTab()}
         {activeTab === 'shadow' && renderShadowTab()}
       </div>
     </div>
