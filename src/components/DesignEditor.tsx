@@ -1086,14 +1086,14 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       const toRad = Math.PI / 180;
       for (const [px, py] of ringCoords) {
         const p = turf.point([px, py]);
-        const d = turf.distance(origin, p, { units: 'meters' });
+        const d = turf.distance(origin, p);
         const br = turf.bearing(origin, p);
         const dx = d * Math.cos((br - bearingX) * toRad);
         const dy = d * Math.cos((br - bearingY) * toRad);
         if (dx < minProjX) minProjX = dx;
         if (dx > maxProjX) maxProjX = dx;
         if (dy < minProjY) minProjY = dy;
-        if (dy > maxProjY) minProjY = dy;
+        if (dy > maxProjY) maxProjY = dy;
       }
       const widthM = Math.max(0, maxProjX - minProjX);
       const heightM = Math.max(0, maxProjY - minProjY);
@@ -1366,10 +1366,16 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         <>
           <div className="flex justify-between items-center mb-3">
             <h3 className="font-bold text-gray-800">Keepouts</h3>
-            <button onClick={() => alert('Add Keepout functionality coming soon!')} className="bg-orange-500 text-white px-3 py-1 rounded-md text-sm font-semibold hover:bg-orange-600 flex items-center space-x-1">
-              <Plus className="w-4 h-4" />
-              <span>New</span>
-            </button>
+            <div className="flex space-x-2"> {/* Added a div to group buttons */}
+              <button onClick={() => alert('Add Keepout functionality coming soon!')} className="bg-orange-500 text-white px-3 py-1 rounded-md text-sm font-semibold hover:bg-orange-600 flex items-center space-x-1">
+                <Plus className="w-4 h-4" />
+                <span>Keepout</span>
+              </button>
+              <button onClick={() => alert('Add Tree functionality coming soon!')} className="bg-orange-500 text-white px-3 py-1 rounded-md text-sm font-semibold hover:bg-orange-600 flex items-center space-x-1">
+                <Plus className="w-4 h-4" />
+                <span>Tree</span>
+              </button>
+            </div>
           </div>
           <div className="border-t pt-4">
             <div className="text-center py-6 text-sm text-gray-500">
