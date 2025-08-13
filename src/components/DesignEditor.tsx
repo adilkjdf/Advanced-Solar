@@ -336,7 +336,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     alignment: row.alignment ?? 'center',
     created_at: row.created_at,
     updated_at: row.updated_at,
-  }), []);
+  }), [dec22ThisYear]);
 
   // Fetch initial data
   useEffect(() => {
@@ -676,7 +676,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     });
 
     try { shadowsLayer.bringToBack(); } catch {}
-  }, [fieldSegments, showShadows, project]);
+  }, [fieldSegments, showShadows, project, dec22ThisYear]);
 
   const handleMouseMove = useCallback((e: any) => {
     if (activeTool !== 'draw' || !mapInstanceRef.current || !drawToolRef.current) return;
@@ -934,7 +934,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       }
       })();
     });
-  }, [updateDistanceLabels, design.id]);
+  }, [updateDistanceLabels, design.id, dec22ThisYear, mapDbToSegment]);
 
   useEffect(() => {
     if (mapContainerRef.current && !mapInstanceRef.current && project.coordinates) {
@@ -1094,7 +1094,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         if (dx < minProjX) minProjX = dx;
         if (dx > maxProjX) maxProjX = dx;
         if (dy < minProjY) minProjY = dy;
-        if (dy > maxProjY) maxProjY = dy;
+        if (dy > maxProjY) minProjY = dy;
       }
       const widthM = Math.max(0, maxProjX - minProjX);
       const heightM = Math.max(0, maxProjY - minProjY);
@@ -1142,7 +1142,7 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
         }
       }
     });
-  }, [fieldSegments, moduleDims]);
+  }, [fieldSegments, moduleDims, meters, toTurfPolygon]);
 
   const clearCurrentShape = () => {
     if (drawToolRef.current) (drawToolRef.current as any).endDraw?.();
@@ -1289,39 +1289,11 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
     }
   };
 
-  return (
-    <div className="w-screen h-screen flex bg-gray-800">
-      <div className="w-80 bg-white shadow-2xl flex flex-col z-20">
-        {/* Sidebar header - always visible */}
-        <div className="p-4 border-b">
-          <div className="flex justify-between items-center mb-2">
-            <h2 className="text-xl font-bold text-gray-800">{design.name}</h2>
-            <button className="p-1 text-gray-500 hover:text-gray-800"><Settings className="w-5 h-5" /></button>
-          </div>
-          <div className="flex items-center justify-between text-sm">
-            <div className="flex items-center space-x-1 text-gray-500 h-5">{renderSavingStatus()}</div>
-            <div className="flex items-center space-x-2">
-              <button className="p-1 text-gray-500 hover:text-gray-800"><RotateCcw className="w-4 h-4" /></button>
-              <button className="p-1 text-gray-500 hover:text-gray-800"><RotateCw className="w-4 h-4" /></button>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs - always visible */}
-        <div className="p-4 border-b">
-          <div className="grid grid-cols-2 gap-2">
-            {sidebarTabs.map(tab => (
-              <button key={tab.id} onClick={() => setActiveSidebarTab(tab.id)} className={`flex flex-col items-center justify-center p-2 rounded-lg transition-colors ${activeSidebarTab === tab.id ? 'bg-orange-100 text-orange-600' : 'hover:bg-gray-100'}`}>
-                <tab.icon className="w-6 h-6 mb-1" />
-                <span className="text-xs font-medium">{tab.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Body switches between create, edit, and list */}
-        <div className="flex-grow p-4 overflow-y-auto">
-          {/* Global toggle stays available in all modes */}
+  const renderSidebarContent = () => {
+    if (activeSidebarTab === 'mechanical') {
+      return (
+        <>
+          {/* Field Segment Shadows Toggle */}
           <div className="mb-3">
             <label htmlFor="toggle-shadows" className="inline-flex items-center space-x-2 text-sm text-gray-800">
               <input
@@ -1388,6 +1360,51 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
               </div>
             </>
           )}
+        </>
+      );
+    } else {
+      return (
+        <div className="text-center py-12 text-gray-500">
+          <p className="text-lg font-medium mb-2">Coming soon!</p>
+          <p className="text-sm">This section is under development.</p>
+        </div>
+      );
+    }
+  };
+
+  return (
+    <div className="w-screen h-screen flex bg-gray-800">
+      <div className="w-80 bg-white shadow-2xl flex flex-col z-20">
+        {/* Sidebar header - always visible */}
+        <div className="p-4 border-b">
+          <div className="flex justify-between items-center mb-2">
+            <h2 className="text-xl font-bold text-gray-800">{design.name}</h2>
+            <button className="p-1 text-gray-500 hover:text-gray-800"><Settings className="w-5 h-5" /></button>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center space-x-1 text-gray-500 h-5">{renderSavingStatus()}</div>
+            <div className="flex items-center space-x-2">
+              <button className="p-1 text-gray-500 hover:text-gray-800"><RotateCcw className="w-4 h-4" /></button>
+              <button className="p-1 text-gray-500 hover:text-gray-800"><RotateCw className="w-4 h-4" /></button>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs - always visible */}
+        <div className="p-4 border-b">
+          <div className="grid grid-cols-2 gap-2">
+            {sidebarTabs.map(tab => (
+              <button key={tab.id} onClick={() => setActiveSidebarTab(tab.id)} className={`flex flex-col items-center justify-center p-2 rounded-lg transition-colors ${activeSidebarTab === tab.id ? 'bg-orange-100 text-orange-600' : 'hover:bg-gray-100'}`}>
+                <tab.icon className="w-6 h-6 mb-1" />
+                <span className="text-xs font-medium">{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Body switches between create, edit, and list */}
+        <div className="flex-grow p-4 overflow-y-auto">
+          {renderSidebarContent()}
         </div>
 
         {/* Footer - always visible */}
