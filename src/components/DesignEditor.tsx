@@ -131,7 +131,6 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
       const height = (typeof len === 'number' && isFinite(len)) ? len : 1.7; // m
       setModuleDims((prev) => ({ ...prev, [moduleId]: { width, height } }));
     } catch {
-      // Defaults if lookup fails
       setModuleDims((prev) => ({ ...prev, [moduleId]: { width: 1.1, height: 1.7 } }));
     }
   }, [moduleDims, modules]);
@@ -1360,6 +1359,23 @@ const DesignEditor: React.FC<DesignEditorProps> = ({ project, design, onBack }) 
               </div>
             </>
           )}
+        </>
+      );
+    } else if (activeSidebarTab === 'keepouts') {
+      return (
+        <>
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="font-bold text-gray-800">Keepouts</h3>
+            <button onClick={() => alert('Add Keepout functionality coming soon!')} className="bg-orange-500 text-white px-3 py-1 rounded-md text-sm font-semibold hover:bg-orange-600 flex items-center space-x-1">
+              <Plus className="w-4 h-4" />
+              <span>New</span>
+            </button>
+          </div>
+          <div className="border-t pt-4">
+            <div className="text-center py-6 text-sm text-gray-500">
+              <a href="#" onClick={(e) => { e.preventDefault(); alert('Add Keepout functionality coming soon!'); }} className="text-blue-600 hover:underline">Add a keepout</a> to get started
+            </div>
+          </div>
         </>
       );
     } else {
